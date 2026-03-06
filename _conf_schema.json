@@ -51,6 +51,13 @@
     "description": "记忆检索设置",
     "hint": "控制向量检索的相关参数",
     "items": {
+      "embedding_provider_id": {
+        "type": "string",
+        "description": "嵌入模型提供商",
+        "hint": "选择用于向量嵌入的 Embedding Provider。留空则使用 AstrBot 中配置的第一个 Embedding Provider",
+        "default": "",
+        "_special": "select_embedding_provider"
+      },
       "top_k": {
         "type": "int",
         "description": "检索返回数量",
