@@ -295,11 +295,7 @@ class FAISSMemoryStore:
             # 清理引用
             self._index = None
 
-            logger.info("[FAISRAG] FAISS 存储已关闭")
+            logger.info("[FAISSRAG] FAISS 存储已关闭")
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 关闭存储失败: {e}", exc_info=True)
-
-
-# 兼容旧类名
-ZVecMemoryStore = FAISSMemoryStore
+            logger.error(f"[FAISSRAG] 关闭存储失败: {e}", exc_info=True)

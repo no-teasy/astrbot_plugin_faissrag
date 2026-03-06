@@ -1,6 +1,6 @@
-"""ZVecRAG - 基于 ZVec 的 AstrBot 长期记忆插件"""
+"""FAISSRAG - 基于 FAISS 的 AstrBot 长期记忆插件"""
 
+from .vector_store import FAISSMemoryStore
 from .embedding import EmbeddingProvider
-from .vector_store import ZVecMemoryStore
 
-__all__ = ["ZVecMemoryStore", "EmbeddingProvider"]
+__all__ = ["FAISSMemoryStore", "EmbeddingProvider"]

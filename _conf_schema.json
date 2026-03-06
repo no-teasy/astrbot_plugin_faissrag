@@ -1,56 +1,109 @@
 {
-  "collection_name": {
-    "type": "string",
-    "default": "zvecrag_memory",
-    "description": "FAISS 记忆集合名称"
+  "general": {
+    "type": "object",
+    "description": "通用设置",
+    "hint": "FAISSRAG 插件的基础配置",
+    "items": {
+      "inject_enabled": {
+        "type": "bool",
+        "description": "启用记忆注入",
+        "hint": "是否在 LLM 请求时自动检索并注入相关记忆到上下文",
+        "default": true
+      },
+      "num_pairs": {
+        "type": "int",
+        "description": "记忆总结对话轮数",
+        "hint": "每积累多少轮对话（每轮包含用户消息+AI回复）进行一次性记忆总结。设为 0 可关闭自动总结。",
+        "default": 5
+      }
+    }
   },
-  "scope_mode": {
-    "type": "string",
-    "default": "global",
-    "options": ["global", "group", "user", "platform"],
-    "description": "记忆作用域模式: global=全局共享, group=群聊隔离, user=用户隔离, platform=平台隔离"
+  "scope": {
+    "type": "object",
+    "description": "记忆作用域",
+    "hint": "控制不同会话/用户之间的记忆隔离方式",
+    "items": {
+      "scope_mode": {
+        "type": "string",
+        "description": "作用域模式",
+        "hint": "global：所有会话共享记忆；group：按群聊隔离；user：按用户隔离；platform：按平台隔离",
+        "default": "global",
+        "options": ["global", "group", "user", "platform"]
+      }
+    }
   },
-  "embedding_dim": {
-    "type": "int",
-    "default": 1536,
-    "description": "嵌入向量维度，常用模型: text-embedding-3-small=1536, text-embedding-3-large=3072, text-embedding-ada-002=1536"
+  "provider": {
+    "type": "object",
+    "description": "LLM 模型选择",
+    "hint": "用于记忆总结的聊天模型，留空则使用当前会话的默认模型",
+    "items": {
+      "summary_llm_provider": {
+        "type": "string",
+        "description": "总结用 LLM Provider ID",
+        "hint": "用于记忆总结的 LLM 提供商。留空则使用当前会话的 LLM。",
+        "default": "",
+        "_special": "select_provider"
+      }
+    }
   },
-  "top_k": {
-    "type": "int",
-    "default": 5,
-    "description": "每次检索返回的记忆数量"
+  "retrieval": {
+    "type": "object",
+    "description": "记忆检索设置",
+    "hint": "控制向量检索的相关参数",
+    "items": {
+      "top_k": {
+        "type": "int",
+        "description": "检索返回数量",
+        "hint": "每次检索返回的记忆条数",
+        "default": 5
+      },
+      "embedding_dim": {
+        "type": "int",
+        "description": "向量维度",
+        "hint": "嵌入向量的维度，必须与你的 Embedding 模型匹配。常用：text-embedding-3-small=1536, text-embedding-3-large=3072",
+        "default": 1536
+      }
+    }
   },
-  "inject_enabled": {
-    "type": "bool",
-    "default": true,
-    "description": "是否在 LLM 请求时自动注入相关记忆"
+  "storage": {
+    "type": "object",
+    "description": "存储设置",
+    "hint": "向量数据库的存储配置",
+    "items": {
+      "collection_name": {
+        "type": "string",
+        "description": "记忆集合名称",
+        "hint": "FAISS 索引文件的名称，用于区分不同的记忆库",
+        "default": "faissrag_memory"
+      }
+    }
   },
-  "num_pairs": {
-    "type": "int",
-    "default": 5,
-    "description": "记忆总结的对话轮数，一问一答算作1轮对话。当对话轮数达到此阈值时自动进行记忆总结并存储"
-  },
-  "summary_llm_provider": {
-    "type": "string",
-    "default": "",
-    "description": "用于记忆总结的 LLM 提供商名称，留空则使用当前会话的 LLM"
-  },
-  "platform_blacklist": {
-    "type": "list",
-    "items": {"type": "string"},
-    "default": [],
-    "description": "禁用记忆功能的平台列表"
-  },
-  "exclude_inject": {
-    "type": "list",
-    "items": {"type": "string"},
-    "default": [],
-    "description": "不注入记忆的会话ID列表（群号/用户ID），在此列表中的会话不会检索记忆注入到LLM"
-  },
-  "exclude_store": {
-    "type": "list",
-    "items": {"type": "string"},
-    "default": [],
-    "description": "不存储记忆的会话ID列表（群号/用户ID），在此列表中的会话不会保存消息到记忆库"
+  "filter": {
+    "type": "object",
+    "description": "过滤设置",
+    "hint": "控制哪些会话不参与记忆的存储或检索",
+    "items": {
+      "platform_blacklist": {
+        "type": "list",
+        "items": {"type": "string"},
+        "description": "平台黑名单",
+        "hint": "禁用记忆功能的平台列表，如 [\"onebot\", \"telegram\"]",
+        "default": []
+      },
+      "exclude_inject": {
+        "type": "list",
+        "items": {"type": "string"},
+        "description": "不注入记忆的会话",
+        "hint": "不检索记忆注入 LLM 的会话 ID（群号/用户 ID）",
+        "default": []
+      },
+      "exclude_store": {
+        "type": "list",
+        "items": {"type": "string"},
+        "description": "不存储记忆的会话",
+        "hint": "不保存消息到记忆库的会话 ID（群号/用户 ID）",
+        "default": []
+      }
+    }
   }
 }
