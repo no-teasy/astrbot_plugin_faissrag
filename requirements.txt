@@ -1,0 +1,7 @@
+# FAISRAG 插件依赖
+
+# FAISS 向量搜索（AstrBot 已内置 faiss-cpu，无需额外安装）
+# faiss-cpu>=1.7.0
+
+# 异步 HTTP 客户端（如需要）
+# aiohttp>=3.9.0

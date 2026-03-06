@@ -1,0 +1,56 @@
+{
+  "collection_name": {
+    "type": "string",
+    "default": "zvecrag_memory",
+    "description": "FAISS 记忆集合名称"
+  },
+  "scope_mode": {
+    "type": "string",
+    "default": "global",
+    "options": ["global", "group", "user", "platform"],
+    "description": "记忆作用域模式: global=全局共享, group=群聊隔离, user=用户隔离, platform=平台隔离"
+  },
+  "embedding_dim": {
+    "type": "int",
+    "default": 1536,
+    "description": "嵌入向量维度，常用模型: text-embedding-3-small=1536, text-embedding-3-large=3072, text-embedding-ada-002=1536"
+  },
+  "top_k": {
+    "type": "int",
+    "default": 5,
+    "description": "每次检索返回的记忆数量"
+  },
+  "inject_enabled": {
+    "type": "bool",
+    "default": true,
+    "description": "是否在 LLM 请求时自动注入相关记忆"
+  },
+  "num_pairs": {
+    "type": "int",
+    "default": 5,
+    "description": "记忆总结的对话轮数，一问一答算作1轮对话。当对话轮数达到此阈值时自动进行记忆总结并存储"
+  },
+  "summary_llm_provider": {
+    "type": "string",
+    "default": "",
+    "description": "用于记忆总结的 LLM 提供商名称，留空则使用当前会话的 LLM"
+  },
+  "platform_blacklist": {
+    "type": "list",
+    "items": {"type": "string"},
+    "default": [],
+    "description": "禁用记忆功能的平台列表"
+  },
+  "exclude_inject": {
+    "type": "list",
+    "items": {"type": "string"},
+    "default": [],
+    "description": "不注入记忆的会话ID列表（群号/用户ID），在此列表中的会话不会检索记忆注入到LLM"
+  },
+  "exclude_store": {
+    "type": "list",
+    "items": {"type": "string"},
+    "default": [],
+    "description": "不存储记忆的会话ID列表（群号/用户ID），在此列表中的会话不会保存消息到记忆库"
+  }
+}
