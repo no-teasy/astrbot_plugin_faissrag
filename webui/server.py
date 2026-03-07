@@ -36,7 +36,7 @@ class FAISSRAGWebUIServer:
         self.app = FastAPI(
             title="FAISSRAG Admin Panel",
             description="FAISSRAG Plugin Web Management Panel",
-            version="1.0.3",
+            version="1.0.4",
         )
 
         self.app.add_middleware(
@@ -565,6 +565,14 @@ class FAISSRAGWebUIServer:
 
     def run_in_thread(self):
         """Run server in background thread"""
+        # 如果 port=0，先绑定一个随机端口
+        if self.port == 0:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((self.host, 0))
+                actual_port = s.getsockname()[1]
+                self.port = actual_port
+        
         config = uvicorn.Config(
             self.app,
             host=self.host,
@@ -572,12 +580,7 @@ class FAISSRAGWebUIServer:
             log_level="warning",
         )
         self.server = uvicorn.Server(config)
-        
-        # Get actual port if random
-        if self.port == 0:
-            self.url = f"http://{self.host}:{self.server.config.port}"
-        else:
-            self.url = f"http://{self.host}:{self.port}"
+        self.url = f"http://{self.host}:{self.port}"
         
         self.server.run()
 

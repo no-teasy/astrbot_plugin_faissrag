@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.3",
+    "1.0.4",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -218,6 +218,8 @@ class FAISSRAGPlugin(Star):
                 enabled = True
                 port = 0
                 host = "127.0.0.1"
+
+            logger.info(f"[FAISSRAG] WebUI 配置: enabled={enabled}, host={host}, port={port}")
 
             if not enabled:
                 logger.info("[FAISSRAG] WebUI 已禁用")
