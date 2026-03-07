@@ -1048,20 +1048,26 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             deleted_buffer = self._message_buffer.copy()
             self._message_buffer.clear()
             self._pending_user_messages.clear()
+        logger.info(f"[FAISSRAG] forget: cleared buffer: {cleared_buffer} items")
 
         # 2. 清除 AstrBot 上下文管理器中的对话
         cleared_context = 0
         deleted_history = []
         try:
             conv_mgr = getattr(self.context, "conversation_manager", None)
+            logger.info(f"[FAISSRAG] forget: conv_mgr exists: {conv_mgr is not None}")
             if conv_mgr:
                 unified_msg_origin = getattr(event, "unified_msg_origin", None)
+                logger.info(f"[FAISSRAG] forget: unified_msg_origin: {unified_msg_origin}")
                 if unified_msg_origin:
                     curr_cid = await conv_mgr.get_curr_conversation_id(unified_msg_origin)
+                    logger.info(f"[FAISSRAG] forget: curr_cid: {curr_cid}")
                     if curr_cid:
                         conversation = await conv_mgr.get_conversation(unified_msg_origin, curr_cid)
+                        logger.info(f"[FAISSRAG] forget: conversation exists: {conversation is not None}")
                         if conversation:
                             history = conversation.get("history", [])
+                            logger.info(f"[FAISSRAG] forget: history length: {len(history)}")
                             # 从后往前删除指定轮次（用户+AI=1轮）
                             pairs_to_delete = rounds * 2  # 每轮包含用户消息和AI回复
                             if len(history) > 0:
@@ -1069,8 +1075,19 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
                                 while len(deleted_history) < pairs_to_delete and history:
                                     deleted_history.insert(0, history.pop())
                                 cleared_context = len(deleted_history)
+                                logger.info(f"[FAISSRAG] forget: deleted {cleared_context} items from history")
                                 # 更新会话历史
                                 await conv_mgr.update_conversation(unified_msg_origin, curr_cid, {"history": history})
+                            else:
+                                logger.info(f"[FAISSRAG] forget: history is empty, nothing to delete")
+                        else:
+                            logger.info(f"[FAISSRAG] forget: conversation is None")
+                    else:
+                        logger.info(f"[FAISSRAG] forget: curr_cid is None")
+                else:
+                    logger.info(f"[FAISSRAG] forget: unified_msg_origin is None")
+            else:
+                logger.info(f"[FAISSRAG] forget: conv_mgr is None")
         except Exception as e:
             logger.warning(f"[FAISSRAG] 清除上下文失败: {e}")
 
