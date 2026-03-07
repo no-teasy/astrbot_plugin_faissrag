@@ -6,6 +6,7 @@ AstrBot 的 RAG 长期记忆插件，使用 FAISS 向量数据库，
 """
 
 import asyncio
+import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -17,13 +18,14 @@ from astrbot.api.star import Context, Star, StarTools, register
 
 from .faiss_memory.vector_store import FAISSMemoryStore
 from .faiss_memory.embedding import EmbeddingProvider
+from .webui.server import FAISSRAGWebUIServer
 
 
 @register(
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.1",
+    "1.0.3",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -95,6 +97,10 @@ class FAISSRAGPlugin(Star):
             self.exclude_inject = set(str(x) for x in self.config.get("exclude_inject", []))
             self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
         self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
+
+        # WebUI 服务器
+        self.webui_server: Optional[FAISSRAGWebUIServer] = None
+        self.webui_thread: Optional[threading.Thread] = None
 
         # 消息缓冲区（用于 LLM 总结）
         self._message_buffer: list[dict] = []
@@ -193,8 +199,48 @@ class FAISSRAGPlugin(Star):
             self._initialized = True
             logger.info("[FAISSRAG] 插件初始化完成")
 
+            # 启动 WebUI
+            await self._start_webui()
+
         except Exception as e:
             logger.error(f"[FAISSRAG] 插件初始化失败: {e}", exc_info=True)
+
+    async def _start_webui(self):
+        """启动 WebUI 服务器"""
+        try:
+            # 从配置获取 WebUI 设置
+            webui_config = self.config.get("webui", {})
+            if isinstance(webui_config, dict):
+                enabled = webui_config.get("enabled", True)
+                port = webui_config.get("port", 0)  # 0 表示随机端口
+                host = webui_config.get("host", "127.0.0.1")
+            else:
+                enabled = True
+                port = 0
+                host = "127.0.0.1"
+
+            if not enabled:
+                logger.info("[FAISSRAG] WebUI 已禁用")
+                return
+
+            # 创建并启动 WebUI 服务器
+            self.webui_server = FAISSRAGWebUIServer(
+                plugin_instance=self,
+                port=port,
+                host=host,
+            )
+            self.webui_server.start()
+            
+            # 等待服务器启动
+            await asyncio.sleep(1)
+            
+            logger.info(f"[FAISSRAG] WebUI 已启动: {self.webui_server.url}")
+            
+            # 将 URL 保存到配置以便显示
+            self.config["webui_url"] = self.webui_server.url
+
+        except Exception as e:
+            logger.error(f"[FAISSRAG] WebUI 启动失败: {e}", exc_info=True)
 
     async def _initialize_embedding_provider(self):
         """初始化嵌入提供者"""
@@ -855,5 +901,13 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
                 logger.info("[FAISSRAG] FAISS 存储已关闭")
             except Exception as e:
                 logger.error(f"[FAISSRAG] 关闭存储失败: {e}")
+
+        # 4. 关闭 WebUI
+        if self.webui_server:
+            try:
+                self.webui_server.stop()
+                logger.info("[FAISSRAG] WebUI 已关闭")
+            except Exception as e:
+                logger.error(f"[FAISSRAG] 关闭 WebUI 失败: {e}")
 
         logger.info("[FAISSRAG] 插件已停止")

@@ -256,16 +256,74 @@ class FAISSMemoryStore:
     async def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
         try:
+            # 按作用域统计
+            scope_counts = {}
+            for scope_key, ids in self._scope_index.items():
+                scope_counts[scope_key] = len(ids)
+            
             return {
                 "total_count": self._index.ntotal,
                 "scope_count": len(self._scope_index),
+                "scopes": scope_counts,
                 "collection_name": self.collection_name,
                 "embedding_dim": self.embedding_dim,
             }
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 获取统计失败: {e}", exc_info=True)
-            return {"total_count": 0, "scope_count": 0}
+            return {"total_count": 0, "scope_count": 0, "scopes": {}}
+
+    async def get_all_memories(
+        self, scope_key: str = "global", limit: int = 50, offset: int = 0
+    ) -> list[dict]:
+        """获取所有记忆（用于 WebUI）"""
+        try:
+            if scope_key not in self._scope_index:
+                return []
+            
+            ids = self._scope_index[scope_key]
+            if offset >= len(ids):
+                return []
+            
+            end = min(offset + limit, len(ids))
+            result = []
+            
+            for idx in ids[offset:end]:
+                if idx < len(self._metadata):
+                    meta = self._metadata[idx]
+                    result.append({
+                        "id": str(idx),
+                        "content": meta.get("content", ""),
+                        "role": meta.get("role", "unknown"),
+                        "scope_key": scope_key,
+                        "timestamp": meta.get("timestamp", 0),
+                    })
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"[FAISSRAG] 获取记忆列表失败: {e}", exc_info=True)
+            return []
+
+    async def delete_memory(self, memory_id: str) -> bool:
+        """删除指定记忆"""
+        try:
+            idx = int(memory_id)
+            if idx < 0 or idx >= len(self._metadata):
+                return False
+            
+            # 从元数据中移除
+            self._metadata.pop(idx)
+            
+            # 重新索引
+            self._rebuild_index()
+            await self._save()
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"[FAISSRAG] 删除记忆失败: {e}", exc_info=True)
+            return False
 
     async def _save(self) -> None:
         """保存索引和元数据"""

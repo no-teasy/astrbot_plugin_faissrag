@@ -112,5 +112,30 @@
         "default": []
       }
     }
+  },
+  "webui": {
+    "type": "object",
+    "description": "WebUI 设置",
+    "hint": "内置 Web 管理界面配置",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用 WebUI",
+        "hint": "是否启用内置的 Web 管理界面",
+        "default": true
+      },
+      "host": {
+        "type": "string",
+        "description": "WebUI 监听地址",
+        "hint": "建议保持默认 127.0.0.1 只允许本机访问",
+        "default": "127.0.0.1"
+      },
+      "port": {
+        "type": "int",
+        "description": "WebUI 端口",
+        "hint": "设为 0 则自动分配空闲端口。查看日志获取实际端口",
+        "default": 0
+      }
+    }
   }
 }
