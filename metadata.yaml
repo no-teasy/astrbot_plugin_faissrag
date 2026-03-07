@@ -1,8 +1,9 @@
-name: FAISSRAG
-author: FAISSRAG
-description: 基于 FAISS 向量数据库的 RAG 长期记忆插件，支持 OpenAI 兼容的嵌入模型
-version: 1.0.0
-homepage: https://github.com/yourname/astrbot_plugin_faissrag
+name: astrbot_plugin_faissrag
+desc: 基于 FAISS 向量数据库的 RAG 长期记忆插件，支持 OpenAI 兼容的嵌入模型
+help: 输入 /zmem help 查看指令帮助
+version: v1.0.0
+author: FAISSRAG Team
+repo: https://github.com/no-teasy/astrbot_plugin_faissrag
 tags:
   - memory
   - rag

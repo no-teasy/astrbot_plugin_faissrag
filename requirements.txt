@@ -1,4 +1,4 @@
-# FAISRAG 插件依赖
+# FAISSRAG 插件依赖
 
 # FAISS 向量搜索（AstrBot 已内置 faiss-cpu，无需额外安装）
 # faiss-cpu>=1.7.0

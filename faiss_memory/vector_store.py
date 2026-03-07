@@ -62,7 +62,7 @@ class FAISSMemoryStore:
             # 加载或创建索引
             if self.index_path.exists() and self.meta_path.exists():
                 # 加载已存在的索引
-                logger.info(f"[FAISRAG] 加载已存在的索引: {self.index_path}")
+                logger.info(f"[FAISSRAG] 加载已存在的索引: {self.index_path}")
                 self._index = faiss.read_index(str(self.index_path))
 
                 with open(self.meta_path, "r", encoding="utf-8") as f:
@@ -70,18 +70,18 @@ class FAISSMemoryStore:
                     self._metadata = data.get("metadata", {})
                     self._scope_index = data.get("scope_index", {})
 
-                logger.info(f"[FAISRAG] 已加载 {self._index.ntotal} 条向量")
+                logger.info(f"[FAISSRAG] 已加载 {self._index.ntotal} 条向量")
             else:
                 # 创建新索引
                 # 使用 IndexFlatIP（内积）进行余弦相似度搜索
                 # 注意：使用余弦相似度时，向量需要先归一化
-                logger.info(f"[FAISRAG] 创建新 FAISS 索引，维度: {self.embedding_dim}")
+                logger.info(f"[FAISSRAG] 创建新 FAISS 索引，维度: {self.embedding_dim}")
                 self._index = faiss.IndexFlatIP(self.embedding_dim)
 
-            logger.info(f"[FAISRAG] FAISS 索引初始化完成: {self.collection_name}")
+            logger.info(f"[FAISSRAG] FAISS 索引初始化完成: {self.collection_name}")
 
         except Exception as e:
-            logger.error(f"[FAISRAG] FAISS 初始化失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] FAISS 初始化失败: {e}", exc_info=True)
             raise
 
     def _normalize(self, embedding: list[float]) -> np.ndarray:
@@ -135,7 +135,7 @@ class FAISSMemoryStore:
             return memory_id
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 添加记忆失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 添加记忆失败: {e}", exc_info=True)
             raise
 
     async def search(
@@ -204,13 +204,13 @@ class FAISSMemoryStore:
             return memories
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 搜索失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 搜索失败: {e}", exc_info=True)
             return []
 
     async def delete_memory(self, memory_id: str) -> bool:
         """删除指定记忆"""
         # FAISS 不支持删除，标记返回失败
-        logger.warning("[FAISRAG] 删除功能未实现（FAISS 不支持删除）")
+        logger.warning("[FAISSRAG] 删除功能未实现（FAISS 不支持删除）")
         return False
 
     async def clear_scope(self, scope_key: str) -> int:
@@ -230,12 +230,12 @@ class FAISSMemoryStore:
             # 重建索引（移除被删除的向量）
             await self._rebuild_index()
 
-            logger.info(f"[FAISRAG] 清除作用域 {scope_key} 的 {count} 条记忆")
+            logger.info(f"[FAISSRAG] 清除作用域 {scope_key} 的 {count} 条记忆")
 
             return count
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 清除记忆失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 清除记忆失败: {e}", exc_info=True)
             return 0
 
     async def _rebuild_index(self) -> None:
@@ -248,10 +248,10 @@ class FAISSMemoryStore:
             # 重新收集所有有效的向量
             # 这里简化处理：需要外部提供向量来重建
             # 实际应用中，可能需要持久化原始向量
-            logger.info("[FAISRAG] 索引需要重建才能真正删除数据")
+            logger.info("[FAISSRAG] 索引需要重建才能真正删除数据")
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 重建索引失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 重建索引失败: {e}", exc_info=True)
 
     async def get_stats(self) -> dict[str, Any]:
         """获取统计信息"""
@@ -264,7 +264,7 @@ class FAISSMemoryStore:
             }
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 获取统计失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 获取统计失败: {e}", exc_info=True)
             return {"total_count": 0, "scope_count": 0}
 
     async def _save(self) -> None:
@@ -281,10 +281,10 @@ class FAISSMemoryStore:
             with open(self.meta_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            logger.debug(f"[FAISRAG] 已保存 {self._index.ntotal} 条向量")
+            logger.debug(f"[FAISSRAG] 已保存 {self._index.ntotal} 条向量")
 
         except Exception as e:
-            logger.error(f"[FAISRAG] 保存失败: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 保存失败: {e}", exc_info=True)
 
     async def close(self) -> None:
         """关闭存储"""

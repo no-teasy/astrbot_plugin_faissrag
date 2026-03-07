@@ -1,8 +1,8 @@
 """
-FAISSRAG Plugin - FAISS-based RAG Long-term Memory for AstrBot
+FAISSRAG 插件 - 基于 FAISS 的 RAG 长期记忆系统
 
-A RAG long-term memory plugin for AstrBot using FAISS vector database,
-supports OpenAI-compatible embedding models.
+AstrBot 的 RAG 长期记忆插件，使用 FAISS 向量数据库，
+支持 OpenAI 兼容的嵌入模型。
 """
 
 import asyncio
@@ -22,39 +22,39 @@ from .faiss_memory.embedding import EmbeddingProvider
 @register(
     "astrbot_plugin_faissrag",
     "FAISSRAG",
-    "FAISS-based RAG long-term memory plugin, supports OpenAI-compatible embedding models.",
+    "基于 FAISS 的 RAG 长期记忆插件，支持 OpenAI 兼容的嵌入模型。",
     "1.0.0",
 )
 class FAISSRAGPlugin(Star):
-    """FAISSRAG Plugin Main Class"""
+    """FAISSRAG 插件主类"""
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config: AstrBotConfig = config
         self.context = context
 
-        # Get plugin data directory
+        # 获取插件数据目录
         self.plugin_data_dir = self._get_plugin_data_dir()
 
-        # Core components
+        # 核心组件
         self.embedding_provider: Optional[EmbeddingProvider] = None
         self.memory_store: Optional[FAISSMemoryStore] = None
 
-        # Status flags
+        # 状态标志
         self._initialized = False
         self._embedding_provider_ready = False
 
-        # Background task tracking
+        # 后台任务跟踪
         self._background_tasks: set[asyncio.Task] = set()
 
-        # Config parameters - support both nested and flat format
-        # Try nested format first (new format from _conf_schema.json)
+        # 配置参数 - 支持嵌套格式和平面格式
+        # 首先尝试嵌套格式（来自 _conf_schema.json 的新格式）
         general_config = self.config.get("general", {})
         if isinstance(general_config, dict):
             self.inject_enabled = general_config.get("inject_enabled", True)
             self.num_pairs = general_config.get("num_pairs", 5)
         else:
-            # Fallback to flat format
+            # 回退到平面格式
             self.inject_enabled = self.config.get("inject_enabled", True)
             self.num_pairs = self.config.get("num_pairs", 5)
 
@@ -91,17 +91,17 @@ class FAISSRAGPlugin(Star):
             self.exclude_inject = set(str(x) for x in filter_config.get("exclude_inject", []))
             self.exclude_store = set(str(x) for x in filter_config.get("exclude_store", []))
         else:
-            # Fallback to flat format
+            # 回退到平面格式
             self.exclude_inject = set(str(x) for x in self.config.get("exclude_inject", []))
             self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
         self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
 
-        # Message buffer (for LLM summarization)
+        # 消息缓冲区（用于 LLM 总结）
         self._message_buffer: list[dict] = []
         self._buffer_lock = asyncio.Lock()
 
     def _create_tracked_task(self, coro) -> asyncio.Task:
-        """Create and track background tasks"""
+        """创建并跟踪后台任务"""
         task = asyncio.create_task(coro)
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
@@ -109,42 +109,42 @@ class FAISSRAGPlugin(Star):
 
     @filter.on_astrbot_loaded()
     async def on_astrbot_loaded(self):
-        """Initialize plugin after AstrBot starts"""
-        logger.info("[FAISSRAG] AstrBot started, initializing plugin...")
+        """AstrBot 启动后初始化插件"""
+        logger.info("[FAISSRAG] AstrBot 已启动，正在初始化插件...")
         self._create_tracked_task(self._initialize_plugin())
 
     def _get_chat_id(self, event: AstrMessageEvent) -> str:
-        """Get current chat ID (group ID or user ID)"""
+        """获取当前聊天ID（群组ID或用户ID）"""
         group_id = getattr(event, "get_group_id", lambda: "")()
         if group_id:
             return str(group_id)
         return str(getattr(event, "get_sender_id", lambda: "")() or "")
 
     def _should_inject(self, event: AstrMessageEvent) -> bool:
-        """Check if memory should be injected"""
+        """检查是否应该注入记忆"""
         chat_id = self._get_chat_id(event)
         if chat_id and chat_id in self.exclude_inject:
             return False
         return True
 
     def _should_store(self, event: AstrMessageEvent) -> bool:
-        """Check if memory should be stored"""
+        """检查是否应该存储记忆"""
         chat_id = self._get_chat_id(event)
         if chat_id and chat_id in self.exclude_store:
             return False
         return True
 
     def _save_exclude_config(self):
-        """Save exclude sessions config to file"""
+        """保存排除会话配置到文件"""
         try:
-            # Support nested format (new) and flat format (legacy)
+            # 支持嵌套格式（新）和平面格式（旧）
             filter_config = self.config.get("filter", {})
             if isinstance(filter_config, dict):
                 filter_config["exclude_inject"] = list(self.exclude_inject)
                 filter_config["exclude_store"] = list(self.exclude_store)
                 self.config["filter"] = filter_config
             else:
-                # Legacy flat format
+                # 旧平面格式
                 self.config["exclude_inject"] = list(self.exclude_inject)
                 self.config["exclude_store"] = list(self.exclude_store)
             if hasattr(self.config, 'save_config'):
@@ -154,7 +154,7 @@ class FAISSRAGPlugin(Star):
             logger.warning(f"[FAISSRAG] Failed to save config: {e}")
 
     def _get_plugin_data_dir(self) -> Path:
-        """Get plugin data directory"""
+        """获取插件数据目录"""
         try:
             data_dir = StarTools.get_data_dir()
             plugin_dir = Path(data_dir) / "plugin_data" / "astrbot_plugin_faissrag"
@@ -166,18 +166,18 @@ class FAISSRAGPlugin(Star):
             return Path(tempfile.gettempdir()) / "astrbot_plugin_faissrag"
 
     async def _initialize_plugin(self):
-        """Initialize plugin core components"""
+        """初始化插件核心组件"""
         try:
-            logger.info("[FAISSRAG] Starting plugin initialization...")
+            logger.info("[FAISSRAG] 正在初始化插件...")
 
-            # 1. Initialize Embedding Provider
+            # 1. 初始化嵌入提供者
             await self._initialize_embedding_provider()
 
             if not self.embedding_provider:
-                logger.error("[FAISSRAG] Embedding Provider init failed, plugin cannot work")
+                logger.error("[FAISSRAG] 嵌入提供者初始化失败，插件无法工作")
                 return
 
-            # 2. Initialize FAISS memory store
+            # 2. 初始化 FAISS 记忆存储
             try:
                 self.memory_store = FAISSMemoryStore(
                     data_dir=str(self.plugin_data_dir),
@@ -185,27 +185,27 @@ class FAISSRAGPlugin(Star):
                     embedding_dim=self.embedding_dim,
                 )
                 await self.memory_store.initialize()
-                logger.info("[FAISSRAG] FAISS store initialized")
+                logger.info("[FAISSRAG] FAISS 存储已初始化")
             except Exception as e:
-                logger.error(f"[FAISSRAG] FAISS store init failed: {e}", exc_info=True)
+                logger.error(f"[FAISSRAG] FAISS 存储初始化失败: {e}", exc_info=True)
                 return
 
             self._initialized = True
-            logger.info("[FAISSRAG] Plugin initialized")
+            logger.info("[FAISSRAG] 插件初始化完成")
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Plugin init failed: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 插件初始化失败: {e}", exc_info=True)
 
     async def _initialize_embedding_provider(self):
-        """Initialize Embedding Provider"""
+        """初始化嵌入提供者"""
         try:
-            # Get embedding_provider_id from config (new nested format or legacy)
+            # 从配置获取 embedding_provider_id（新的嵌套格式或旧的平面格式）
             retrieval_config = self.config.get("retrieval", {})
             provider_id = ""
             if isinstance(retrieval_config, dict):
                 provider_id = retrieval_config.get("embedding_provider_id", "") or ""
             if not provider_id:
-                # Fallback to legacy flat format
+                # 回退到旧的平面格式
                 provider_id = self.config.get("embedding_provider_id", "") or ""
 
             if provider_id:
@@ -217,15 +217,15 @@ class FAISSRAGPlugin(Star):
                         test_embedding = await self.embedding_provider.get_embedding("test")
                         if test_embedding:
                             self.embedding_dim = len(test_embedding)
-                            logger.info(f"[FAISSRAG] Using provider '{provider_id}', detected dim: {self.embedding_dim}")
+                            logger.info(f"[FAISSRAG] 使用提供者 '{provider_id}'，检测到维度: {self.embedding_dim}")
                     except Exception as e:
-                        logger.warning(f"[FAISSRAG] Cannot detect embedding dim: {e}")
-                    logger.info(f"[FAISSRAG] Embedding provider initialized: {provider_id}")
+                        logger.warning(f"[FAISSRAG] 无法检测嵌入维度: {e}")
+                    logger.info(f"[FAISSRAG] 嵌入提供者已初始化: {provider_id}")
                     return
                 else:
-                    logger.warning(f"[FAISSRAG] Provider '{provider_id}' not found")
+                    logger.warning(f"[FAISSRAG] 未找到提供者 '{provider_id}'")
 
-            # Try to get default embedding provider from AstrBot
+            # 尝试从 AstrBot 获取默认嵌入提供者
             providers = self.context.get_all_embedding_providers()
             if providers:
                 self.embedding_provider = EmbeddingProvider(providers[0])
@@ -234,19 +234,19 @@ class FAISSRAGPlugin(Star):
                     test_embedding = await self.embedding_provider.get_embedding("test")
                     if test_embedding:
                         self.embedding_dim = len(test_embedding)
-                        logger.info(f"[FAISSRAG] Using default provider, detected dim: {self.embedding_dim}")
+                        logger.info(f"[FAISSRAG] 使用默认提供者，检测到维度: {self.embedding_dim}")
                 except Exception as e:
-                    logger.warning(f"[FAISSRAG] Cannot detect embedding dim: {e}")
-                logger.info(f"[FAISSRAG] Embedding provider initialized (default)")
+                    logger.warning(f"[FAISSRAG] 无法检测嵌入维度: {e}")
+                logger.info(f"[FAISSRAG] 嵌入提供者已初始化（默认）")
                 return
 
-            logger.warning("[FAISSRAG] No embedding provider available")
+            logger.warning("[FAISSRAG] 没有可用的嵌入提供者")
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Embedding provider init failed: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 嵌入提供者初始化失败: {e}", exc_info=True)
 
     def _resolve_scope_key(self, event: AstrMessageEvent) -> str:
-        """Resolve current session scope key"""
+        """解析当前会话的作用域键"""
         mode = getattr(self, "scope_mode", "global")
 
         if mode == "global":
@@ -270,7 +270,7 @@ class FAISSRAGPlugin(Star):
         return "global"
 
     def _get_chat_context(self, event: AstrMessageEvent) -> dict:
-        """Get chat context info"""
+        """获取聊天上下文信息"""
         platform = getattr(event, "get_platform_name", lambda: "unknown")()
         group_id = getattr(event, "get_group_id", lambda: "")()
         user_id = getattr(event, "get_sender_id", lambda: "")()
@@ -302,7 +302,7 @@ class FAISSRAGPlugin(Star):
         }
 
     def _is_command_message(self, text: str) -> bool:
-        """Check if message is a command"""
+        """检查消息是否为命令"""
         text = text.strip()
         if not text:
             return False
@@ -313,7 +313,7 @@ class FAISSRAGPlugin(Star):
         return False
 
     async def _ensure_initialized(self) -> bool:
-        """Ensure plugin is initialized"""
+        """确保插件已初始化"""
         if not self._initialized or not self.memory_store:
             if not self._embedding_provider_ready:
                 await self._initialize_embedding_provider()
@@ -335,44 +335,44 @@ class FAISSRAGPlugin(Star):
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        """Before LLM request: retrieve memory and inject"""
+        """LLM 请求前：检索记忆并注入"""
         if not self.inject_enabled:
-            logger.debug("[FAISSRAG] Inject disabled, skip")
+            logger.debug("[FAISSRAG] 注入已禁用，跳过")
             return
         if not event:
-            logger.warning("[FAISSRAG] Event is None, skip")
+            logger.warning("[FAISSRAG] 事件为空，跳过")
             return
         if not req:
-            logger.warning("[FAISSRAG] Request is None, skip")
+            logger.warning("[FAISSRAG] 请求为空，跳过")
             return
         if not self._should_inject(event):
             chat_id = self._get_chat_id(event)
-            logger.debug(f"[FAISSRAG] Chat {chat_id} in exclude list, skip inject")
+            logger.debug(f"[FAISSRAG] 聊天 {chat_id} 在排除列表中，跳过注入")
             return
         if not await self._ensure_initialized():
-            logger.debug("[FAISSRAG] Plugin not initialized, skip")
+            logger.debug("[FAISSRAG] 插件未初始化，跳过")
             return
 
         try:
             query = getattr(event, "message_str", "") or ""
             if not query:
-                logger.debug("[FAISSRAG] User message empty, skip")
+                logger.debug("[FAISSRAG] 用户消息为空，跳过")
                 return
             query = query.lstrip("@").strip()
             if not query:
-                logger.debug("[FAISSRAG] Message empty after strip, skip")
+                logger.debug("[FAISSRAG] 消息清理后为空，跳过")
                 return
             if not self.embedding_provider:
-                logger.warning("[FAISSRAG] Embedding provider unavailable")
+                logger.warning("[FAISSRAG] 嵌入提供者不可用")
                 return
 
             embedding = await self.embedding_provider.get_embedding(query)
             if not embedding:
-                logger.warning(f"[FAISSRAG] Cannot get embedding, query len: {len(query)}")
+                logger.warning(f"[FAISSRAG] 无法获取嵌入，查询长度: {len(query)}")
                 return
 
             scope_key = self._resolve_scope_key(event)
-            logger.debug(f"[FAISSRAG] Search memory, scope: {scope_key}, top_k: {self.top_k}")
+            logger.debug(f"[FAISSRAG] 搜索记忆，作用域: {scope_key}, top_k: {self.top_k}")
 
             results = await self.memory_store.search(
                 embedding=embedding,
@@ -381,7 +381,7 @@ class FAISSRAGPlugin(Star):
             )
 
             if not results:
-                logger.debug(f"[FAISSRAG] No relevant memory found (scope: {scope_key})")
+                logger.debug(f"[FAISSRAG] 未找到相关记忆（作用域: {scope_key}）")
                 return
 
             memory_parts = []
@@ -406,26 +406,26 @@ class FAISSRAGPlugin(Star):
             current_sp = getattr(req, "system_prompt", "") or ""
             setattr(req, "system_prompt", f"{current_sp}\n\n{inject_text}" if current_sp else inject_text)
 
-            logger.info(f"[FAISSRAG] Injected {len(results)} memories (scope: {scope_key})")
+            logger.info(f"[FAISSRAG] 已注入 {len(results)} 条记忆（作用域: {scope_key}）")
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Memory retrieval failed: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 记忆检索失败: {e}", exc_info=True)
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, resp: LLMResponse):
-        """After LLM response: add to buffer, trigger LLM summary when threshold reached"""
+        """LLM 响应后：添加到缓冲区，达到阈值时触发 LLM 总结"""
         if not event:
-            logger.warning("[FAISSRAG] Event is None, skip")
+            logger.warning("[FAISSRAG] 事件为空，跳过")
             return
         if not resp:
-            logger.warning("[FAISSRAG] Response is None, skip")
+            logger.warning("[FAISSRAG] 响应为空，跳过")
             return
         if not self._should_store(event):
             chat_id = self._get_chat_id(event)
-            logger.debug(f"[FAISSRAG] Chat {chat_id} in exclude list, skip store")
+            logger.debug(f"[FAISSRAG] 聊天 {chat_id} 在排除列表中，跳过存储")
             return
         if not await self._ensure_initialized():
-            logger.debug("[FAISSRAG] Plugin not initialized, skip")
+            logger.debug("[FAISSRAG] 插件未初始化，跳过")
             return
 
         try:
@@ -433,13 +433,13 @@ class FAISSRAGPlugin(Star):
             ai_response = getattr(resp, "completion_text", "") or ""
 
             if not user_message:
-                logger.debug("[FAISSRAG] User message empty, skip")
+                logger.debug("[FAISSRAG] 用户消息为空，跳过")
                 return
             if not ai_response:
-                logger.debug("[FAISSRAG] AI response empty, skip")
+                logger.debug("[FAISSRAG] AI 响应为空，跳过")
                 return
             if self._is_command_message(user_message):
-                logger.debug("[FAISSRAG] Command message, skip")
+                logger.debug("[FAISSRAG] 命令消息，跳过")
                 return
 
             scope_key = self._resolve_scope_key(event)
@@ -458,22 +458,22 @@ class FAISSRAGPlugin(Star):
 
                 buffer_size = len(self._message_buffer)
                 threshold = self.num_pairs * 2
-                logger.debug(f"[FAISSRAG] Msg added to buffer, current: {buffer_size}/{threshold} (scope: {scope_key})")
+                logger.debug(f"[FAISSRAG] 消息已添加到缓冲区，当前: {buffer_size}/{threshold}（作用域: {scope_key}）")
 
                 if buffer_size >= threshold:
-                    logger.info(f"[FAISSRAG] Threshold {threshold} reached, triggering LLM summary...")
+                    logger.info(f"[FAISSRAG] 达到阈值 {threshold}，正在触发 LLM 总结...")
                     self._create_tracked_task(self._summarize_and_store())
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Add to buffer failed: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 添加到缓冲区失败: {e}", exc_info=True)
 
     async def _summarize_and_store(self):
-        """Call LLM to summarize buffer messages and store summary"""
+        """调用 LLM 总结缓冲区消息并存储总结"""
         if not self.embedding_provider:
-            logger.warning("[FAISSRAG] Embedding Provider not ready, skip summary")
+            logger.warning("[FAISSRAG] 嵌入提供者未就绪，跳过总结")
             return
         if not self.memory_store:
-            logger.warning("[FAISSRAG] Memory store not initialized, skip summary")
+            logger.warning("[FAISSRAG] 记忆存储未初始化，跳过总结")
             return
 
         async with self._buffer_lock:
@@ -485,22 +485,22 @@ class FAISSRAGPlugin(Star):
         try:
             memory_text = "\n".join([item["content"] for item in buffer])
             scope_key = buffer[0]["scope_key"]
-            logger.info(f"[FAISSRAG] Starting summary of {len(buffer)} messages (scope: {scope_key})...")
+            logger.info(f"[FAISSRAG] 开始总结 {len(buffer)} 条消息（作用域: {scope_key}）...")
 
-            # Call LLM for summary
+            # 调用 LLM 进行总结
             llm_provider = None
             if self.summary_llm_provider:
                 llm_provider = self.context.get_provider(self.summary_llm_provider)
                 if llm_provider:
-                    logger.info(f"[FAISSRAG] Using configured LLM provider: {self.summary_llm_provider}")
+                    logger.info(f"[FAISSRAG] 使用配置的 LLM 提供者: {self.summary_llm_provider}")
                 else:
-                    logger.warning(f"[FAISSRAG] Configured LLM provider '{self.summary_llm_provider}' not found, fallback to current session")
+                    logger.warning(f"[FAISSRAG] 未找到配置的 LLM 提供者 '{self.summary_llm_provider}'，回退到当前会话")
 
             if not llm_provider:
                 llm_provider = self.context.get_using_provider()
 
             if not llm_provider:
-                logger.error("[FAISSRAG] Cannot get LLM Provider")
+                logger.error("[FAISSRAG] 无法获取 LLM 提供者")
                 async with self._buffer_lock:
                     self._message_buffer.extend(buffer)
                 return
@@ -533,32 +533,32 @@ class FAISSRAGPlugin(Star):
                 "content": f"Current absolute time: {now_str}. If original conversation does not explicitly give specific date/year, do not fabricate exact dates, use relative expressions like 'recent', 'before', 'later'."
             })
 
-            logger.debug(f"[FAISSRAG] Calling LLM for summary, content length: {len(memory_text)}")
+            logger.debug(f"[FAISSRAG] 调用 LLM 进行总结，内容长度: {len(memory_text)}")
             llm_response = await llm_provider.text_chat(
                 prompt=memory_text,
                 contexts=contexts,
             )
 
             if not llm_response:
-                logger.error("[FAISSRAG] LLM summary returned empty")
+                logger.error("[FAISSRAG] LLM 总结返回为空")
                 async with self._buffer_lock:
                     self._message_buffer.extend(buffer)
                 return
 
             summary_text = getattr(llm_response, "completion_text", "") or ""
             if not summary_text:
-                logger.error("[FAISSRAG] Cannot extract summary text from LLM response")
+                logger.error("[FAISSRAG] 无法从 LLM 响应中提取总结文本")
                 async with self._buffer_lock:
                     self._message_buffer.extend(buffer)
                 return
 
             summary_text = summary_text.strip()
-            logger.info(f"[FAISSRAG] LLM summary complete, length: {len(summary_text)}")
+            logger.info(f"[FAISSRAG] LLM 总结完成，长度: {len(summary_text)}")
 
-            # Get embedding and store
+            # 获取嵌入并存储
             embedding = await self.embedding_provider.get_embedding(summary_text)
             if not embedding:
-                logger.error("[FAISSRAG] Cannot get embedding for summary text")
+                logger.error("[FAISSRAG] 无法获取总结文本的嵌入")
                 async with self._buffer_lock:
                     self._message_buffer.extend(buffer)
                 return
@@ -577,27 +577,27 @@ class FAISSRAGPlugin(Star):
                 metadata=metadata,
             )
 
-            logger.info(f"[FAISSRAG] Memory summary stored (scope: {scope_key}, length: {len(summary_text)})")
+            logger.info(f"[FAISSRAG] 记忆总结已存储（作用域: {scope_key}，长度: {len(summary_text)}）")
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Summary and store failed: {e}", exc_info=True)
+            logger.error(f"[FAISSRAG] 总结和存储失败: {e}", exc_info=True)
             try:
                 async with self._buffer_lock:
                     self._message_buffer.extend(buffer)
-                logger.info(f"[FAISSRAG] Restored {len(buffer)} messages to buffer")
+                logger.info(f"[FAISSRAG] 已恢复 {len(buffer)} 条消息到缓冲区")
             except Exception as restore_error:
-                logger.error(f"[FAISSRAG] Restore buffer failed: {restore_error}")
+                logger.error(f"[FAISSRAG] 恢复缓冲区失败: {restore_error}")
 
-    # ==================== Command Handling ====================
+    # ==================== 命令处理 ====================
 
     @filter.command_group("zmem")
     def zmem_group(self):
-        """Memory management commands /zmem"""
+        """记忆管理命令 /zmem"""
         pass
 
     @zmem_group.command("status")
     async def cmd_status(self, event: AstrMessageEvent):
-        """View memory system status"""
+        """查看记忆系统状态"""
         if not await self._ensure_initialized():
             yield event.plain_result("Plugin initializing, please try again later...")
             return
@@ -606,37 +606,37 @@ class FAISSRAGPlugin(Star):
             stats = await self.memory_store.get_stats()
             scope_key = self._resolve_scope_key(event)
 
-            status_text = f"""【FAISSRAG Memory Status】
-Current Scope: {scope_key}
-Total Memories: {stats.get('total_count', 0)}
-Embedding Dim: {self.embedding_dim}
-Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
+            status_text = f"""【FAISSRAG 记忆状态】
+当前作用域: {scope_key}
+记忆总数: {stats.get('total_count', 0)}
+嵌入维度: {self.embedding_dim}
+注入状态: {'已启用' if self.inject_enabled else '已禁用'}
 
-【Available Commands】
-/zmem status - View status
-/zmem search <keyword> - Search memory
-/zmem clear - Clear current scope memory
+【可用命令】
+/zmem status - 查看状态
+/zmem search <关键词> - 搜索记忆
+/zmem clear - 清除当前作用域记忆
 """
             yield event.plain_result(status_text)
         except Exception as e:
-            logger.error(f"[FAISSRAG] Get status failed: {e}")
-            yield event.plain_result(f"Get status failed: {e}")
+            logger.error(f"[FAISSRAG] 获取状态失败: {e}")
+            yield event.plain_result(f"获取状态失败: {e}")
 
     @zmem_group.command("search")
     async def cmd_search(self, event: AstrMessageEvent, query: str = ""):
-        """Search memory"""
+        """搜索记忆"""
         if not await self._ensure_initialized():
             yield event.plain_result("Plugin initializing, please try again later...")
             return
 
         if not query:
-            yield event.plain_result("Usage: /zmem search <keyword>")
+            yield event.plain_result("用法: /zmem search <关键词>")
             return
 
         try:
             embedding = await self.embedding_provider.get_embedding(query)
             if not embedding:
-                yield event.plain_result("Cannot get embedding vector")
+                yield event.plain_result("无法获取嵌入向量")
                 return
 
             scope_key = self._resolve_scope_key(event)
@@ -647,26 +647,26 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             )
 
             if not results:
-                yield event.plain_result("No relevant memory found")
+                yield event.plain_result("未找到相关记忆")
                 return
 
-            result_text = "【Search Results】\n\n"
+            result_text = "【搜索结果】\n\n"
             for i, item in enumerate(results, 1):
                 score = item.get("score", 0)
                 content = item.get("content", "")[:200]
                 role = item.get("role", "unknown")
-                result_text += f"{i}. [{role}] {content}\n   Similarity: {score:.2%}\n\n"
+                result_text += f"{i}. [{role}] {content}\n   相似度: {score:.2%}\n\n"
 
             yield event.plain_result(result_text)
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Search failed: {e}", exc_info=True)
-            yield event.plain_result(f"Search failed: {e}")
+            logger.error(f"[FAISSRAG] 搜索失败: {e}", exc_info=True)
+            yield event.plain_result(f"搜索失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("clear")
     async def cmd_clear(self, event: AstrMessageEvent):
-        """Clear current scope memory"""
+        """清除当前作用域记忆"""
         if not await self._ensure_initialized():
             yield event.plain_result("Plugin initializing, please try again later...")
             return
@@ -675,17 +675,17 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             scope_key = self._resolve_scope_key(event)
             count = await self.memory_store.clear_scope(scope_key)
 
-            yield event.plain_result(f"Cleared {count} memories")
-            logger.info(f"[FAISSRAG] Clear memory: {count} (scope: {scope_key})")
+            yield event.plain_result(f"已清除 {count} 条记忆")
+            logger.info(f"[FAISSRAG] 清除记忆: {count}（作用域: {scope_key}）")
 
         except Exception as e:
-            logger.error(f"[FAISSRAG] Clear memory failed: {e}")
-            yield event.plain_result(f"Clear memory failed: {e}")
+            logger.error(f"[FAISSRAG] 清除记忆失败: {e}")
+            yield event.plain_result(f"清除记忆失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("exclude")
     async def cmd_exclude(self, event: AstrMessageEvent, action: str = "", session_id: str = ""):
-        """Manage exclude sessions /zmem exclude add|remove|list <session_id>"""
+        """管理排除会话 /zmem exclude add|remove|list <session_id>"""
         text = getattr(event, "message_str", "") or ""
         tokens = text.strip().split()
 
@@ -695,39 +695,39 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             session_id = tokens[2]
 
         if action == "list":
-            inject_list = ", ".join(sorted(self.exclude_inject)) or "None"
-            store_list = ", ".join(sorted(self.exclude_store)) or "None"
-            result = f"""【Exclude Session List】
-No Inject: {inject_list}
-No Store: {store_list}
+            inject_list = ", ".join(sorted(self.exclude_inject)) or "无"
+            store_list = ", ".join(sorted(self.exclude_store)) or "无"
+            result = f"""【排除会话列表】
+不注入: {inject_list}
+不存储: {store_list}
 
-Usage:
-/zmem exclude add <session_id> - Exclude from inject
-/zmem exclude add store <session_id> - Exclude from store
-/zmem exclude remove <session_id> - Remove exclude
-/zmem exclude list - View list"""
+用法:
+/zmem exclude add <session_id> - 排除注入
+/zmem exclude add store <session_id> - 排除存储
+/zmem exclude remove <session_id> - 移除排除
+/zmem exclude list - 查看列表"""
             yield event.plain_result(result)
             return
 
         if action == "add":
             if not session_id:
-                yield event.plain_result("Usage: /zmem exclude add <session_id>")
+                yield event.plain_result("用法: /zmem exclude add <session_id>")
                 return
 
             text = getattr(event, "message_str", "") or ""
             if "store" in text.lower():
                 self.exclude_store.add(session_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"Session {session_id} excluded from memory store (saved)")
+                yield event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
             else:
                 self.exclude_inject.add(session_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"Session {session_id} excluded from memory inject (saved)")
+                yield event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
             return
 
         if action == "remove":
             if not session_id:
-                yield event.plain_result("Usage: /zmem exclude remove <session_id>")
+                yield event.plain_result("用法: /zmem exclude remove <session_id>")
                 return
 
             removed_inject = session_id in self.exclude_inject
@@ -738,64 +738,90 @@ Usage:
 
             if removed_inject or removed_store:
                 self._save_exclude_config()
-                yield event.plain_result(f"Removed exclude for session {session_id} (saved)")
+                yield event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
             else:
-                yield event.plain_result(f"Session {session_id} not in exclude list")
+                yield event.plain_result(f"会话 {session_id} 不在排除列表中")
             return
 
-        yield event.plain_result("""【Exclude Session Management】
-Usage:
-/zmem exclude add <session_id> - Exclude from inject
-/zmem exclude add store <session_id> - Exclude from store
-/zmem exclude remove <session_id> - Remove exclude
-/zmem exclude list - View list
+        yield event.plain_result("""【排除会话管理】
+用法:
+/zmem exclude add <session_id> - 排除注入
+/zmem exclude add store <session_id> - 排除存储
+/zmem exclude remove <session_id> - 移除排除
+/zmem exclude list - 查看列表
 
-Examples:
-/zmem exclude add 123456789 - Exclude 123456789 from inject
-/zmem exclude add store 987654321 - Exclude 987654321 from store
-/zmem exclude remove 123456789 - Restore inject
-/zmem exclude list - View all excludes""")
+示例:
+/zmem exclude add 123456789 - 排除 123456789 注入
+/zmem exclude add store 987654321 - 排除 987654321 存储
+/zmem exclude remove 123456789 - 恢复注入
+/zmem exclude list - 查看所有排除""")
+
+    @zmem_group.command("save")
+    async def cmd_save(self, event: AstrMessageEvent):
+        """手动触发总结并保存记忆"""
+        if not await self._ensure_initialized():
+            yield event.plain_result("插件正在初始化，请稍后再试...")
+            return
+
+        async with self._buffer_lock:
+            buffer_size = len(self._message_buffer)
+
+        if buffer_size == 0:
+            yield event.plain_result("缓冲区中没有消息需要保存")
+            return
+
+        yield event.plain_result(f"发现缓冲区中有 {buffer_size} 条消息，正在开始总结...")
+        await self._summarize_and_store()
+
+        async with self._buffer_lock:
+            remaining = len(self._message_buffer)
+
+        if remaining == 0:
+            yield event.plain_result(f"成功保存 {buffer_size} 条消息到记忆")
+        else:
+            yield event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("help")
     async def cmd_help(self, event: AstrMessageEvent):
-        """Show help info"""
-        help_text = """【FAISSRAG Memory Plugin Help】
-RAG long-term memory system based on FAISS vector database.
+        """显示帮助信息"""
+        help_text = """【FAISSRAG 记忆插件帮助】
+基于 FAISS 向量数据库的 RAG 长期记忆系统。
 
-【Commands】
-/zmem status - View memory system status
-/zmem search <keyword> - Search relevant memory
-/zmem clear - Clear current scope memory (admin)
-/zmem exclude list - View exclude list
-/zmem exclude add <ID> - Exclude from inject
-/zmem exclude add store <ID> - Exclude from store
-/zmem exclude remove <ID> - Remove exclude
+【命令】
+/zmem status - 查看记忆系统状态
+/zmem search <关键词> - 搜索相关记忆
+/zmem save - 手动触发总结并保存缓冲区
+/zmem clear - 清除当前作用域记忆（管理员）
+/zmem exclude list - 查看排除列表
+/zmem exclude add <ID> - 排除注入
+/zmem exclude add store <ID> - 排除存储
+/zmem exclude remove <ID> - 移除排除
 
-【Features】
-- Auto store user and AI conversation history
-- Auto retrieve and inject relevant memory before LLM request
-- Support semantic similarity search
+【功能】
+- 自动存储用户和 AI 对话历史
+- 在 LLM 请求前自动检索并注入相关记忆
+- 支持语义相似度搜索
 
-【Config in plugin settings】
-- collection_name: Memory collection name
-- embedding_dim: Embedding vector dimension
-- top_k: Number of retrieval results
-- inject_enabled: Enable memory inject
-- exclude_inject: Session IDs to exclude from inject
-- exclude_store: Session IDs to exclude from store
+【插件设置中的配置】
+- collection_name: 记忆集合名称
+- embedding_dim: 嵌入向量维度
+- top_k: 检索结果数量
+- inject_enabled: 启用记忆注入
+- exclude_inject: 排除注入的会话 ID
+- exclude_store: 排除存储的会话 ID
 """
         yield event.plain_result(help_text)
 
-    # ==================== Lifecycle Management ====================
+    # ==================== 生命周期管理 ====================
 
     async def terminate(self):
-        """Cleanup when plugin is unloaded"""
-        logger.info("[FAISSRAG] Plugin stopping...")
+        """插件卸载时清理资源"""
+        logger.info("[FAISSRAG] 插件正在停止...")
 
-        # 1. Cancel all background tasks
+        # 1. 取消所有后台任务
         if self._background_tasks:
-            logger.info(f"[FAISSRAG] Canceling {len(self._background_tasks)} background tasks...")
+            logger.info(f"[FAISSRAG] 正在取消 {len(self._background_tasks)} 个后台任务...")
             for task in self._background_tasks:
                 if not task.done():
                     task.cancel()
@@ -806,20 +832,20 @@ RAG long-term memory system based on FAISS vector database.
                         timeout=5.0,
                     )
                 except Exception as e:
-                    logger.warning(f"[FAISSRAG] Error waiting for tasks: {e}")
+                    logger.warning(f"[FAISSRAG] 等待任务时出错: {e}")
             self._background_tasks.clear()
 
-        # 2. Flush remaining buffer
+        # 2. 刷新剩余缓冲区
         if self._message_buffer:
-            logger.info(f"[FAISSRAG] Flushing {len(self._message_buffer)} messages...")
+            logger.info(f"[FAISSRAG] 正在刷新 {len(self._message_buffer)} 条消息...")
             await self._summarize_and_store()
 
-        # 3. Close FAISS store
+        # 3. 关闭 FAISS 存储
         if self.memory_store:
             try:
                 await self.memory_store.close()
-                logger.info("[FAISSRAG] FAISS store closed")
+                logger.info("[FAISSRAG] FAISS 存储已关闭")
             except Exception as e:
-                logger.error(f"[FAISSRAG] Close store failed: {e}")
+                logger.error(f"[FAISSRAG] 关闭存储失败: {e}")
 
-        logger.info("[FAISSRAG] Plugin stopped")
+        logger.info("[FAISSRAG] 插件已停止")
