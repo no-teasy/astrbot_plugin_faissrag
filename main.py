@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.4",
+    "1.0.5",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -176,6 +176,9 @@ class FAISSRAGPlugin(Star):
         try:
             logger.info("[FAISSRAG] 正在初始化插件...")
 
+            # 0. 启动 WebUI（尽早启动，即使其他组件失败也能访问）
+            await self._start_webui()
+
             # 1. 初始化嵌入提供者
             await self._initialize_embedding_provider()
 
@@ -194,13 +197,10 @@ class FAISSRAGPlugin(Star):
                 logger.info("[FAISSRAG] FAISS 存储已初始化")
             except Exception as e:
                 logger.error(f"[FAISSRAG] FAISS 存储初始化失败: {e}", exc_info=True)
-                return
+                # 继续运行，WebUI 已经启动
 
             self._initialized = True
             logger.info("[FAISSRAG] 插件初始化完成")
-
-            # 启动 WebUI
-            await self._start_webui()
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 插件初始化失败: {e}", exc_info=True)
