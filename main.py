@@ -110,17 +110,6 @@ class FAISSRAGPlugin(Star):
             # 回退到平面格式
             self.exclude_inject = set(str(x) for x in self.config.get("exclude_inject", []))
             self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
-        
-        # 尝试从 KV 存储加载排除配置
-        try:
-            kv_exclude_inject = await self.get_kv_data("exclude_inject", [])
-            kv_exclude_store = await self.get_kv_data("exclude_store", [])
-            if kv_exclude_inject:
-                self.exclude_inject = set(str(x) for x in kv_exclude_inject)
-            if kv_exclude_store:
-                self.exclude_store = set(str(x) for x in kv_exclude_store)
-        except Exception as e:
-            logger.warning(f"[FAISSRAG] Failed to load exclude config from KV: {e}")
 
         # WebUI 服务器
         self.webui_server: Optional[FAISSRAGWebUIServer] = None
@@ -210,6 +199,18 @@ class FAISSRAGPlugin(Star):
 
             # 0. 启动 WebUI（尽早启动，即使其他组件失败也能访问）
             await self._start_webui()
+
+            # 0.1 从 KV 存储加载排除配置
+            try:
+                kv_exclude_inject = await self.get_kv_data("exclude_inject", [])
+                kv_exclude_store = await self.get_kv_data("exclude_store", [])
+                if kv_exclude_inject:
+                    self.exclude_inject = set(str(x) for x in kv_exclude_inject)
+                if kv_exclude_store:
+                    self.exclude_store = set(str(x) for x in kv_exclude_store)
+                logger.info("[FAISSRAG] 从 KV 存储加载排除配置成功")
+            except Exception as e:
+                logger.warning(f"[FAISSRAG] Failed to load exclude config from KV: {e}")
 
             # 1. 初始化嵌入提供者
             await self._initialize_embedding_provider()
@@ -954,7 +955,6 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
         # 未知操作
         yield event.plain_result("""未知操作，可用: add, remove, list
 示例: /zmem exclude add group 123456789""")
-            return
 
         yield event.plain_result("""【排除会话管理】
 用法:
