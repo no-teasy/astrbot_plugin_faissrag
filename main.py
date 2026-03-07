@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.6",
+    "1.0.7",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -50,6 +50,18 @@ class FAISSRAGPlugin(Star):
 
         # 后台任务跟踪
         self._background_tasks: set[asyncio.Task] = set()
+
+        # 立即启动初始化（在事件循环中调度）
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果事件循环正在运行，稍后调度
+                asyncio.ensure_future(self._initialize_plugin())
+            else:
+                # 如果没有运行，同步调用
+                loop.run_until_complete(self._initialize_plugin())
+        except Exception as e:
+            logger.warning(f"[FAISSRAG] 立即初始化失败，将在 on_astrbot_loaded 中重试: {e}")
 
         # 配置参数 - 支持嵌套格式和平面格式
         # 首先尝试嵌套格式（来自 _conf_schema.json 的新格式）
@@ -117,9 +129,10 @@ class FAISSRAGPlugin(Star):
 
     @filter.on_astrbot_loaded()
     async def on_astrbot_loaded(self):
-        """AstrBot 启动后初始化插件"""
-        logger.info("[FAISSRAG] AstrBot 已启动，正在初始化插件...")
-        self._create_tracked_task(self._initialize_plugin())
+        """AstrBot 启动后初始化插件（备用）"""
+        if not self._initialized:
+            logger.info("[FAISSRAG] on_astrbot_loaded 触发初始化...")
+            await self._initialize_plugin()
 
     def _get_chat_id(self, event: AstrMessageEvent) -> str:
         """获取当前聊天ID（群组ID或用户ID）"""
