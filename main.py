@@ -313,23 +313,31 @@ class FAISSRAGPlugin(Star):
         return False
 
     async def _ensure_initialized(self) -> bool:
-        """确保插件已初始化"""
-        if not self._initialized or not self.memory_store:
-            if not self._embedding_provider_ready:
-                await self._initialize_embedding_provider()
-            if self.embedding_provider and not self.memory_store:
-                try:
-                    self.memory_store = FAISSMemoryStore(
-                        data_dir=str(self.plugin_data_dir),
-                        collection_name=self.collection_name,
-                        embedding_dim=self.embedding_dim,
-                    )
-                    await self.memory_store.initialize()
-                    self._initialized = True
-                except Exception as e:
-                    logger.error(f"[FAISSRAG] Re-init failed: {e}")
-            return False
-        return True
+        """Ensure plugin is initialized"""
+        if self._initialized and self.memory_store and self.embedding_provider:
+            return True
+
+        # Try to initialize if not ready
+        if not self._embedding_provider_ready:
+            await self._initialize_embedding_provider()
+
+        if self.embedding_provider and not self.memory_store:
+            try:
+                self.memory_store = FAISSMemoryStore(
+                    data_dir=str(self.plugin_data_dir),
+                    collection_name=self.collection_name,
+                    embedding_dim=self.embedding_dim,
+                )
+                await self.memory_store.initialize()
+            except Exception as e:
+                logger.error(f"[FAISSRAG] Memory store init failed: {e}")
+                return False
+
+        if self.embedding_provider and self.memory_store:
+            self._initialized = True
+            return True
+
+        return False
 
     # ==================== Event Hooks ====================
 
