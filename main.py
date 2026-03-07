@@ -1,4 +1,4 @@
-"""
+﻿"""
 FAISSRAG 插件 - 基于 FAISS 的 RAG 长期记忆系统
 
 AstrBot 的 RAG 长期记忆插件，使用 FAISS 向量数据库，
@@ -22,8 +22,8 @@ from .faiss_memory.embedding import EmbeddingProvider
 @register(
     "astrbot_plugin_faissrag",
     "FAISSRAG",
-    "基于 FAISS 的 RAG 长期记忆插件，支持 OpenAI 兼容的嵌入模型。",
-    "1.0.0",
+    "FAISS-based RAG long-term memory plugin.",
+    "1.0.1",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -592,14 +592,14 @@ class FAISSRAGPlugin(Star):
 
     @filter.command_group("zmem")
     def zmem_group(self):
-        """记忆管理命令 /zmem"""
+        """Memory management commands /zmem"""
         pass
 
     @zmem_group.command("status")
     async def cmd_status(self, event: AstrMessageEvent):
-        """查看记忆系统状态"""
+        """View memory system status"""
         if not await self._ensure_initialized():
-            yield event.plain_result("Plugin initializing, please try again later...")
+            await event.plain_result("Plugin initializing, please try again later...")
             return
 
         try:
@@ -607,36 +607,36 @@ class FAISSRAGPlugin(Star):
             scope_key = self._resolve_scope_key(event)
 
             status_text = f"""【FAISSRAG 记忆状态】
-当前作用域: {scope_key}
-记忆总数: {stats.get('total_count', 0)}
-嵌入维度: {self.embedding_dim}
-注入状态: {'已启用' if self.inject_enabled else '已禁用'}
+Current Scope: {scope_key}
+Total Memories: {stats.get('total_count', 0)}
+Embedding Dim: {self.embedding_dim}
+Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 
-【可用命令】
-/zmem status - 查看状态
-/zmem search <关键词> - 搜索记忆
-/zmem clear - 清除当前作用域记忆
+【Available Commands】
+/zmem status - View status
+/zmem search <keyword> - Search memory
+/zmem clear - Clear current scope memory
 """
-            yield event.plain_result(status_text)
+            await event.plain_result(status_text)
         except Exception as e:
             logger.error(f"[FAISSRAG] 获取状态失败: {e}")
-            yield event.plain_result(f"获取状态失败: {e}")
+            await event.plain_result(f"获取状态失败: {e}")
 
     @zmem_group.command("search")
     async def cmd_search(self, event: AstrMessageEvent, query: str = ""):
         """搜索记忆"""
         if not await self._ensure_initialized():
-            yield event.plain_result("Plugin initializing, please try again later...")
+            await event.plain_result("Plugin initializing, please try again later...")
             return
 
         if not query:
-            yield event.plain_result("用法: /zmem search <关键词>")
+            await event.plain_result("用法: /zmem search <关键词>")
             return
 
         try:
             embedding = await self.embedding_provider.get_embedding(query)
             if not embedding:
-                yield event.plain_result("无法获取嵌入向量")
+                await event.plain_result("无法获取嵌入向量")
                 return
 
             scope_key = self._resolve_scope_key(event)
@@ -647,7 +647,7 @@ class FAISSRAGPlugin(Star):
             )
 
             if not results:
-                yield event.plain_result("未找到相关记忆")
+                await event.plain_result("未找到相关记忆")
                 return
 
             result_text = "【搜索结果】\n\n"
@@ -657,30 +657,30 @@ class FAISSRAGPlugin(Star):
                 role = item.get("role", "unknown")
                 result_text += f"{i}. [{role}] {content}\n   相似度: {score:.2%}\n\n"
 
-            yield event.plain_result(result_text)
+            await event.plain_result(result_text)
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 搜索失败: {e}", exc_info=True)
-            yield event.plain_result(f"搜索失败: {e}")
+            await event.plain_result(f"搜索失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("clear")
     async def cmd_clear(self, event: AstrMessageEvent):
         """清除当前作用域记忆"""
         if not await self._ensure_initialized():
-            yield event.plain_result("Plugin initializing, please try again later...")
+            await event.plain_result("Plugin initializing, please try again later...")
             return
 
         try:
             scope_key = self._resolve_scope_key(event)
             count = await self.memory_store.clear_scope(scope_key)
 
-            yield event.plain_result(f"已清除 {count} 条记忆")
+            await event.plain_result(f"已清除 {count} 条记忆")
             logger.info(f"[FAISSRAG] 清除记忆: {count}（作用域: {scope_key}）")
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 清除记忆失败: {e}")
-            yield event.plain_result(f"清除记忆失败: {e}")
+            await event.plain_result(f"清除记忆失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("exclude")
@@ -706,28 +706,28 @@ class FAISSRAGPlugin(Star):
 /zmem exclude add store <session_id> - 排除存储
 /zmem exclude remove <session_id> - 移除排除
 /zmem exclude list - 查看列表"""
-            yield event.plain_result(result)
+            await event.plain_result(result)
             return
 
         if action == "add":
             if not session_id:
-                yield event.plain_result("用法: /zmem exclude add <session_id>")
+                await event.plain_result("用法: /zmem exclude add <session_id>")
                 return
 
             text = getattr(event, "message_str", "") or ""
             if "store" in text.lower():
                 self.exclude_store.add(session_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
+                await event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
             else:
                 self.exclude_inject.add(session_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
+                await event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
             return
 
         if action == "remove":
             if not session_id:
-                yield event.plain_result("用法: /zmem exclude remove <session_id>")
+                await event.plain_result("用法: /zmem exclude remove <session_id>")
                 return
 
             removed_inject = session_id in self.exclude_inject
@@ -738,12 +738,12 @@ class FAISSRAGPlugin(Star):
 
             if removed_inject or removed_store:
                 self._save_exclude_config()
-                yield event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
+                await event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
             else:
-                yield event.plain_result(f"会话 {session_id} 不在排除列表中")
+                await event.plain_result(f"会话 {session_id} 不在排除列表中")
             return
 
-        yield event.plain_result("""【排除会话管理】
+        await event.plain_result("""【排除会话管理】
 用法:
 /zmem exclude add <session_id> - 排除注入
 /zmem exclude add store <session_id> - 排除存储
@@ -760,26 +760,26 @@ class FAISSRAGPlugin(Star):
     async def cmd_save(self, event: AstrMessageEvent):
         """手动触发总结并保存记忆"""
         if not await self._ensure_initialized():
-            yield event.plain_result("插件正在初始化，请稍后再试...")
+            await event.plain_result("插件正在初始化，请稍后再试...")
             return
 
         async with self._buffer_lock:
             buffer_size = len(self._message_buffer)
 
         if buffer_size == 0:
-            yield event.plain_result("缓冲区中没有消息需要保存")
+            await event.plain_result("缓冲区中没有消息需要保存")
             return
 
-        yield event.plain_result(f"发现缓冲区中有 {buffer_size} 条消息，正在开始总结...")
+        await event.plain_result(f"发现缓冲区中有 {buffer_size} 条消息，正在开始总结...")
         await self._summarize_and_store()
 
         async with self._buffer_lock:
             remaining = len(self._message_buffer)
 
         if remaining == 0:
-            yield event.plain_result(f"成功保存 {buffer_size} 条消息到记忆")
+            await event.plain_result(f"成功保存 {buffer_size} 条消息到记忆")
         else:
-            yield event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
+            await event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("help")
@@ -811,7 +811,7 @@ class FAISSRAGPlugin(Star):
 - exclude_inject: 排除注入的会话 ID
 - exclude_store: 排除存储的会话 ID
 """
-        yield event.plain_result(help_text)
+        await event.plain_result(help_text)
 
     # ==================== 生命周期管理 ====================
 
