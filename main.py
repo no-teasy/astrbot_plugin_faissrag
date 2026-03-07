@@ -136,11 +136,14 @@ class FAISSRAGPlugin(Star):
             await self._initialize_plugin()
 
     def _get_chat_id(self, event: AstrMessageEvent) -> str:
-        """获取当前聊天ID（群组ID或用户ID）"""
+        """获取当前聊天ID（带前缀：group: 或 user:）"""
         group_id = getattr(event, "get_group_id", lambda: "")()
         if group_id:
-            return str(group_id)
-        return str(getattr(event, "get_sender_id", lambda: "")() or "")
+            return f"group:{group_id}"
+        user_id = getattr(event, "get_sender_id", lambda: "")()
+        if user_id:
+            return f"user:{user_id}"
+        return ""
 
     def _should_inject(self, event: AstrMessageEvent) -> bool:
         """检查是否应该注入记忆"""
@@ -848,7 +851,7 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("exclude")
     async def cmd_exclude(self, event: AstrMessageEvent, action: str = "", session_id: str = ""):
-        """管理排除会话 /zmem exclude add|remove|list <session_id>"""
+        """管理排除会话 /zmem exclude add|remove|list <type:id>"""
         text = getattr(event, "message_str", "") or ""
         tokens = text.strip().split()
 
@@ -865,59 +868,91 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 不存储: {store_list}
 
 用法:
-/zmem exclude add <session_id> - 排除注入
-/zmem exclude add store <session_id> - 排除存储
-/zmem exclude remove <session_id> - 移除排除
+/zmem exclude add group:<群号> - 排除群聊注入
+/zmem exclude add user:<用户号> - 排除用户注入
+/zmem exclude add store group:<群号> - 排除群聊存储
+/zmem exclude add store user:<用户号> - 排除用户存储
+/zmem exclude remove <group:id> - 移除排除
 /zmem exclude list - 查看列表"""
             yield event.plain_result(result)
             return
 
         if action == "add":
             if not session_id:
-                yield event.plain_result("用法: /zmem exclude add <session_id>")
+                yield event.plain_result("""用法:
+/zmem exclude add group:<群号> - 排除群聊注入
+/zmem exclude add user:<用户号> - 排除用户注入
+/zmem exclude add store group:<群号> - 排除群聊存储
+/zmem exclude add store user:<用户号> - 排除用户存储
+
+示例:
+/zmem exclude add group:123456789 - 排除群 123456789 注入
+/zmem exclude add user:987654321 - 排除用户 987654321 注入
+/zmem exclude add store group:111111 - 排除群 111111 存储""")
                 return
+
+            # 自动添加前缀
+            target_id = session_id
+            if not session_id.startswith("group:") and not session_id.startswith("user:"):
+                # 尝试自动判断：检查消息来源
+                group_id = getattr(event, "get_group_id", lambda: "")()
+                if group_id:
+                    target_id = f"group:{session_id}"
+                else:
+                    target_id = f"user:{session_id}"
 
             text = getattr(event, "message_str", "") or ""
             if "store" in text.lower():
-                self.exclude_store.add(session_id)
+                self.exclude_store.add(target_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
+                yield event.plain_result(f"会话 {target_id} 已排除记忆存储（已保存）")
             else:
-                self.exclude_inject.add(session_id)
+                self.exclude_inject.add(target_id)
                 self._save_exclude_config()
-                yield event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
+                yield event.plain_result(f"会话 {target_id} 已排除记忆注入（已保存）")
             return
 
         if action == "remove":
             if not session_id:
-                yield event.plain_result("用法: /zmem exclude remove <session_id>")
+                yield event.plain_result("用法: /zmem exclude remove <group:id>")
                 return
 
-            removed_inject = session_id in self.exclude_inject
-            removed_store = session_id in self.exclude_store
+            # 也尝试自动添加前缀
+            target_id = session_id
+            if not session_id.startswith("group:") and not session_id.startswith("user:"):
+                group_id = getattr(event, "get_group_id", lambda: "")()
+                if group_id:
+                    target_id = f"group:{session_id}"
+                else:
+                    target_id = f"user:{session_id}"
 
-            self.exclude_inject.discard(session_id)
-            self.exclude_store.discard(session_id)
+            removed_inject = target_id in self.exclude_inject
+            removed_store = target_id in self.exclude_store
+
+            self.exclude_inject.discard(target_id)
+            self.exclude_store.discard(target_id)
 
             if removed_inject or removed_store:
                 self._save_exclude_config()
-                yield event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
+                yield event.plain_result(f"已移除会话 {target_id} 的排除（已保存）")
             else:
-                yield event.plain_result(f"会话 {session_id} 不在排除列表中")
+                yield event.plain_result(f"会话 {target_id} 不在排除列表中")
             return
 
         yield event.plain_result("""【排除会话管理】
 用法:
-/zmem exclude add <session_id> - 排除注入
-/zmem exclude add store <session_id> - 排除存储
-/zmem exclude remove <session_id> - 移除排除
+/zmem exclude add group:<群号> - 排除群聊注入
+/zmem exclude add user:<用户号> - 排除用户注入
+/zmem exclude add store group:<群号> - 排除群聊存储
+/zmem exclude add store user:<用户号> - 排除用户存储
+/zmem exclude remove <group:id> - 移除排除
 /zmem exclude list - 查看列表
 
 示例:
-/zmem exclude add 123456789 - 排除 123456789 注入
-/zmem exclude add store 987654321 - 排除 987654321 存储
-/zmem exclude remove 123456789 - 恢复注入
-/zmem exclude list - 查看所有排除""")
+/zmem exclude add group:123456789 - 排除群 123456789 注入
+/zmem exclude add user:987654321 - 排除用户 987654321 注入
+/zmem exclude add store group:111111 - 排除群 111111 存储
+/zmem exclude remove group:123456789 - 恢复注入""")
 
     @zmem_group.command("save")
     async def cmd_save(self, event: AstrMessageEvent):
@@ -958,9 +993,11 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 /zmem save - 手动触发总结并保存缓冲区
 /zmem clear - 清除当前作用域记忆（管理员）
 /zmem exclude list - 查看排除列表
-/zmem exclude add <ID> - 排除注入
-/zmem exclude add store <ID> - 排除存储
-/zmem exclude remove <ID> - 移除排除
+/zmem exclude add group:<群号> - 排除群聊注入
+/zmem exclude add user:<用户号> - 排除用户注入
+/zmem exclude add store group:<群号> - 排除群聊存储
+/zmem exclude add store user:<用户号> - 排除用户存储
+/zmem exclude remove <group:id> - 移除排除
 
 【功能】
 - 自动存储用户和 AI 对话历史
@@ -972,7 +1009,7 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 - embedding_dim: 嵌入向量维度
 - top_k: 检索结果数量
 - inject_enabled: 启用记忆注入
-- exclude_inject: 排除注入的会话 ID
+- exclude_inject: 排除注入的会话 ID（格式: group:群号 或 user:用户号）
 - exclude_store: 排除存储的会话 ID
 """
         yield event.plain_result(help_text)
