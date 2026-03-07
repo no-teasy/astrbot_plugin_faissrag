@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.7",
+    "1.0.8",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -676,7 +676,7 @@ class FAISSRAGPlugin(Star):
     async def cmd_status(self, event: AstrMessageEvent):
         """View memory system status"""
         if not await self._ensure_initialized():
-            await event.plain_result("Plugin initializing, please try again later...")
+            yield event.plain_result("Plugin initializing, please try again later...")
             return
 
         try:
@@ -694,26 +694,26 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 /zmem search <keyword> - Search memory
 /zmem clear - Clear current scope memory
 """
-            await event.plain_result(status_text)
+            yield event.plain_result(status_text)
         except Exception as e:
             logger.error(f"[FAISSRAG] 获取状态失败: {e}")
-            await event.plain_result(f"获取状态失败: {e}")
+            yield event.plain_result(f"获取状态失败: {e}")
 
     @zmem_group.command("search")
     async def cmd_search(self, event: AstrMessageEvent, query: str = ""):
         """搜索记忆"""
         if not await self._ensure_initialized():
-            await event.plain_result("Plugin initializing, please try again later...")
+            yield event.plain_result("Plugin initializing, please try again later...")
             return
 
         if not query:
-            await event.plain_result("用法: /zmem search <关键词>")
+            yield event.plain_result("用法: /zmem search <关键词>")
             return
 
         try:
             embedding = await self.embedding_provider.get_embedding(query)
             if not embedding:
-                await event.plain_result("无法获取嵌入向量")
+                yield event.plain_result("无法获取嵌入向量")
                 return
 
             scope_key = self._resolve_scope_key(event)
@@ -724,7 +724,7 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             )
 
             if not results:
-                await event.plain_result("未找到相关记忆")
+                yield event.plain_result("未找到相关记忆")
                 return
 
             result_text = "【搜索结果】\n\n"
@@ -734,30 +734,30 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
                 role = item.get("role", "unknown")
                 result_text += f"{i}. [{role}] {content}\n   相似度: {score:.2%}\n\n"
 
-            await event.plain_result(result_text)
+            yield event.plain_result(result_text)
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 搜索失败: {e}", exc_info=True)
-            await event.plain_result(f"搜索失败: {e}")
+            yield event.plain_result(f"搜索失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("clear")
     async def cmd_clear(self, event: AstrMessageEvent):
         """清除当前作用域记忆"""
         if not await self._ensure_initialized():
-            await event.plain_result("Plugin initializing, please try again later...")
+            yield event.plain_result("Plugin initializing, please try again later...")
             return
 
         try:
             scope_key = self._resolve_scope_key(event)
             count = await self.memory_store.clear_scope(scope_key)
 
-            await event.plain_result(f"已清除 {count} 条记忆")
+            yield event.plain_result(f"已清除 {count} 条记忆")
             logger.info(f"[FAISSRAG] 清除记忆: {count}（作用域: {scope_key}）")
 
         except Exception as e:
             logger.error(f"[FAISSRAG] 清除记忆失败: {e}")
-            await event.plain_result(f"清除记忆失败: {e}")
+            yield event.plain_result(f"清除记忆失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("exclude")
@@ -783,28 +783,28 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 /zmem exclude add store <session_id> - 排除存储
 /zmem exclude remove <session_id> - 移除排除
 /zmem exclude list - 查看列表"""
-            await event.plain_result(result)
+            yield event.plain_result(result)
             return
 
         if action == "add":
             if not session_id:
-                await event.plain_result("用法: /zmem exclude add <session_id>")
+                yield event.plain_result("用法: /zmem exclude add <session_id>")
                 return
 
             text = getattr(event, "message_str", "") or ""
             if "store" in text.lower():
                 self.exclude_store.add(session_id)
                 self._save_exclude_config()
-                await event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
+                yield event.plain_result(f"会话 {session_id} 已排除记忆存储（已保存）")
             else:
                 self.exclude_inject.add(session_id)
                 self._save_exclude_config()
-                await event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
+                yield event.plain_result(f"会话 {session_id} 已排除记忆注入（已保存）")
             return
 
         if action == "remove":
             if not session_id:
-                await event.plain_result("用法: /zmem exclude remove <session_id>")
+                yield event.plain_result("用法: /zmem exclude remove <session_id>")
                 return
 
             removed_inject = session_id in self.exclude_inject
@@ -815,12 +815,12 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 
             if removed_inject or removed_store:
                 self._save_exclude_config()
-                await event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
+                yield event.plain_result(f"已移除会话 {session_id} 的排除（已保存）")
             else:
-                await event.plain_result(f"会话 {session_id} 不在排除列表中")
+                yield event.plain_result(f"会话 {session_id} 不在排除列表中")
             return
 
-        await event.plain_result("""【排除会话管理】
+        yield event.plain_result("""【排除会话管理】
 用法:
 /zmem exclude add <session_id> - 排除注入
 /zmem exclude add store <session_id> - 排除存储
@@ -837,26 +837,26 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
     async def cmd_save(self, event: AstrMessageEvent):
         """手动触发总结并保存记忆"""
         if not await self._ensure_initialized():
-            await event.plain_result("插件正在初始化，请稍后再试...")
+            yield event.plain_result("插件正在初始化，请稍后再试...")
             return
 
         async with self._buffer_lock:
             buffer_size = len(self._message_buffer)
 
         if buffer_size == 0:
-            await event.plain_result("缓冲区中没有消息需要保存")
+            yield event.plain_result("缓冲区中没有消息需要保存")
             return
 
-        await event.plain_result(f"发现缓冲区中有 {buffer_size} 条消息，正在开始总结...")
+        yield event.plain_result(f"发现缓冲区中有 {buffer_size} 条消息，正在开始总结...")
         await self._summarize_and_store()
 
         async with self._buffer_lock:
             remaining = len(self._message_buffer)
 
         if remaining == 0:
-            await event.plain_result(f"成功保存 {buffer_size} 条消息到记忆")
+            yield event.plain_result(f"成功保存 {buffer_size} 条消息到记忆")
         else:
-            await event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
+            yield event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("help")
@@ -888,7 +888,7 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 - exclude_inject: 排除注入的会话 ID
 - exclude_store: 排除存储的会话 ID
 """
-        await event.plain_result(help_text)
+        yield event.plain_result(help_text)
 
     # ==================== 生命周期管理 ====================
 
@@ -934,3 +934,4 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
                 logger.error(f"[FAISSRAG] 关闭 WebUI 失败: {e}")
 
         logger.info("[FAISSRAG] 插件已停止")
+

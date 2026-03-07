@@ -36,7 +36,7 @@ class FAISSRAGWebUIServer:
         self.app = FastAPI(
             title="FAISSRAG Admin Panel",
             description="FAISSRAG Plugin Web Management Panel",
-            version="1.0.7",
+            version="1.0.8",
         )
 
         self.app.add_middleware(
