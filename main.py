@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.8",
+    "1.0.9",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -118,6 +118,7 @@ class FAISSRAGPlugin(Star):
 
         # 消息缓冲区（用于 LLM 总结）
         self._message_buffer: list[dict] = []
+        self._pending_user_messages: dict[str, dict] = {}  # 存储待配对的用户消息
         self._buffer_lock = asyncio.Lock()
 
     def _create_tracked_task(self, coro) -> asyncio.Task:
@@ -422,6 +423,31 @@ class FAISSRAGPlugin(Star):
         if not req:
             logger.warning("[FAISSRAG] 请求为空，跳过")
             return
+
+        # 获取用户消息并存储到待配对字典
+        query = getattr(event, "message_str", "") or ""
+        if query:
+            query = query.lstrip("@").strip()
+            if query:
+                # 生成唯一 key 用于配对用户消息和 AI 回复
+                sender_id = getattr(event, "get_sender_id", lambda: "")() or ""
+                group_id = getattr(event, "get_group_id", lambda: "")() or ""
+                chat_id = group_id or sender_id
+                msg_key = f"{chat_id}:{time.time()}"
+
+                chat_ctx = self._get_chat_context(event)
+                scope_key = self._resolve_scope_key(event)
+
+                self._pending_user_messages[msg_key] = {
+                    "content": query,
+                    "timestamp": time.time(),
+                    "scope_key": scope_key,
+                    "metadata": chat_ctx,
+                }
+                # 将 key 附加到 request 对象，供 on_llm_response 使用
+                req._faissrag_msg_key = msg_key
+                logger.debug(f"[FAISSRAG] 用户消息已暂存，key: {msg_key}")
+
         if not self._should_inject(event):
             chat_id = self._get_chat_id(event)
             logger.debug(f"[FAISSRAG] 聊天 {chat_id} 在排除列表中，跳过注入")
@@ -431,13 +457,8 @@ class FAISSRAGPlugin(Star):
             return
 
         try:
-            query = getattr(event, "message_str", "") or ""
             if not query:
                 logger.debug("[FAISSRAG] 用户消息为空，跳过")
-                return
-            query = query.lstrip("@").strip()
-            if not query:
-                logger.debug("[FAISSRAG] 消息清理后为空，跳过")
                 return
             if not self.embedding_provider:
                 logger.warning("[FAISSRAG] 嵌入提供者不可用")
@@ -730,10 +751,12 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
             result_text = "【搜索结果】\n\n"
             for i, item in enumerate(results, 1):
                 score = item.get("score", 0)
-                content = item.get("content", "")[:200]
+                content = item.get("content", "")[:150]
                 role = item.get("role", "unknown")
-                result_text += f"{i}. [{role}] {content}\n   相似度: {score:.2%}\n\n"
+                memory_id = item.get("memory_id", "")
+                result_text += f"{i}. [{role}] {content}\n   ID: {memory_id} | 相似度: {score:.2%}\n\n"
 
+            result_text += "使用 /zmem view <ID> 查看完整信息"
             yield event.plain_result(result_text)
 
         except Exception as e:
@@ -758,6 +781,69 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
         except Exception as e:
             logger.error(f"[FAISSRAG] 清除记忆失败: {e}")
             yield event.plain_result(f"清除记忆失败: {e}")
+
+    @zmem_group.command("view")
+    async def cmd_view(self, event: AstrMessageEvent, memory_id: str = ""):
+        """查看记忆详情 /zmem view <memory_id>"""
+        if not await self._ensure_initialized():
+            yield event.plain_result("Plugin initializing, please try again later...")
+            return
+
+        if not memory_id:
+            # 尝试从消息中提取 ID
+            text = getattr(event, "message_str", "") or ""
+            tokens = text.strip().split()
+            if len(tokens) >= 2:
+                memory_id = tokens[1].strip()
+
+        if not memory_id:
+            yield event.plain_result("用法: /zmem view <memory_id>")
+            return
+
+        try:
+            # 获取记忆详情
+            memory = await self.memory_store.get_memory_by_id(memory_id)
+            if not memory:
+                yield event.plain_result(f"未找到记忆: {memory_id}")
+                return
+
+            # 构建详细信息
+            content = memory.get("content", "")
+            role = memory.get("role", "unknown")
+            scope_key = memory.get("scope_key", "")
+
+            detail_text = f"【记忆详情】\n\n"
+            detail_text += f"ID: {memory_id}\n"
+            detail_text += f"角色: {role}\n"
+            detail_text += f"作用域: {scope_key}\n"
+
+            if memory.get("sender_id"):
+                detail_text += f"发送者ID: {memory['sender_id']}\n"
+            if memory.get("sender_name"):
+                detail_text += f"发送者昵称: {memory['sender_name']}\n"
+            if memory.get("platform"):
+                detail_text += f"平台: {memory['platform']}\n"
+            if memory.get("chat_type"):
+                detail_text += f"聊天类型: {memory['chat_type']}\n"
+            if memory.get("chat_id"):
+                detail_text += f"聊天ID: {memory['chat_id']}\n"
+            if memory.get("timestamp"):
+                import datetime
+                try:
+                    dt = datetime.datetime.fromtimestamp(memory["timestamp"])
+                    detail_text += f"时间: {dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                except:
+                    pass
+            if memory.get("message_count"):
+                detail_text += f"消息数: {memory['message_count']}\n"
+
+            detail_text += f"\n内容:\n{content}"
+
+            yield event.plain_result(detail_text)
+
+        except Exception as e:
+            logger.error(f"[FAISSRAG] 查看记忆失败: {e}")
+            yield event.plain_result(f"查看失败: {e}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("exclude")
@@ -868,6 +954,7 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 【命令】
 /zmem status - 查看记忆系统状态
 /zmem search <关键词> - 搜索相关记忆
+/zmem view <ID> - 查看记忆详情
 /zmem save - 手动触发总结并保存缓冲区
 /zmem clear - 清除当前作用域记忆（管理员）
 /zmem exclude list - 查看排除列表

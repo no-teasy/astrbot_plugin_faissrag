@@ -36,7 +36,7 @@ class FAISSRAGWebUIServer:
         self.app = FastAPI(
             title="FAISSRAG Admin Panel",
             description="FAISSRAG Plugin Web Management Panel",
-            version="1.0.8",
+            version="1.0.9",
         )
 
         self.app.add_middleware(
@@ -166,268 +166,574 @@ class FAISSRAGWebUIServer:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FAISSRAG Admin Panel</title>
+    <title>FAISSRAG Memory Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --bg-card-hover: #22222e;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-tertiary: #ec4899;
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --glow-shadow: 0 0 40px rgba(99, 102, 241, 0.15);
+            --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-        .header p {
-            opacity: 0.8;
-            font-size: 14px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        .card h2 {
-            font-size: 18px;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        .stat-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .stat-label {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #5568d3;
-        }
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-        .btn-sm {
-            padding: 5px 10px;
-            font-size: 12px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-            color: #333;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .memory-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        .memory-item {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            transition: background 0.3s;
-        }
-        .memory-item:hover {
-            background: #f8f9fa;
-        }
-        .memory-content {
-            font-size: 14px;
-            color: #333;
-            margin-bottom: 10px;
             line-height: 1.6;
         }
-        .memory-meta {
-            font-size: 12px;
-            color: #999;
-            display: flex;
-            gap: 15px;
+
+        /* Background Pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 0%, rgba(139, 92, 246, 0.1), transparent),
+                radial-gradient(ellipse 60% 40% at 0% 100%, rgba(236, 72, 153, 0.08), transparent);
+            pointer-events: none;
+            z-index: -1;
         }
+
+        .header {
+            background: rgba(18, 18, 26, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 24px 32px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--glow-shadow);
+        }
+
+        .logo-text h1 {
+            font-size: 22px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-text p {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 32px;
+        }
+
+        .header-stat {
+            text-align: center;
+        }
+
+        .header-stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        /* Tab Navigation */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: var(--bg-secondary);
+            padding: 6px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            width: fit-content;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab.active {
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Search Box */
+        .search-section {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--card-shadow);
+        }
+
         .search-box {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 20px;
         }
-        .search-box input {
+
+        .search-input-wrapper {
             flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
+            position: relative;
         }
-        .tab-nav {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
+
+        .search-input-wrapper::before {
+            content: '⌕';
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+            color: var(--text-muted);
         }
-        .tab-btn {
-            padding: 10px 20px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 14px;
-            color: #666;
-            border-radius: 6px;
+
+        .search-input {
+            width: 100%;
+            padding: 16px 16px 16px 48px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
             transition: all 0.3s;
         }
-        .tab-btn.active {
-            background: #667eea;
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .scope-select {
+            padding: 16px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            min-width: 180px;
+        }
+
+        .scope-select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
             color: white;
         }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #999;
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
         }
-        .empty {
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        /* Memory Cards */
+        .memory-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .memory-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .memory-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+            box-shadow: var(--glow-shadow);
+        }
+
+        .memory-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .memory-role {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .memory-score {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--accent-secondary);
+            font-weight: 500;
+        }
+
+        .memory-content {
+            font-size: 14px;
+            color: var(--text-primary);
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+
+        .memory-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .meta-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .meta-tag-icon {
+            opacity: 0.7;
+        }
+
+        .memory-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Config Section */
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .config-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .config-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .config-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Empty & Loading States */
+        .state-message {
             text-align: center;
-            padding: 40px;
-            color: #999;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .state-text {
+            font-size: 16px;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Memory ID Badge */
+        .memory-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .header-stats {
+                width: 100%;
+                justify-content: space-around;
+            }
+
+            .search-box {
+                flex-direction: column;
+            }
+
+            .scope-select {
+                width: 100%;
+            }
+
+            .tabs {
+                width: 100%;
+                overflow-x: auto;
+            }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>FAISSRAG Admin Panel</h1>
-        <p>Memory Management System</p>
-    </div>
-    
-    <div class="container">
-        <div class="card">
-            <h2>Statistics</h2>
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-value" id="totalMemories">-</div>
-                    <div class="stat-label">Total Memories</div>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🧠</div>
+                <div class="logo-text">
+                    <h1>FAISSRAG Memory Center</h1>
+                    <p>Vector-based Long-term Memory System</p>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="scopeMode">-</div>
-                    <div class="stat-label">Scope Mode</div>
+            </div>
+            <div class="header-stats">
+                <div class="header-stat">
+                    <div class="header-stat-value" id="totalMemories">-</div>
+                    <div class="header-stat-label">Total Memories</div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="topK">-</div>
-                    <div class="stat-label">Top K</div>
+                <div class="header-stat">
+                    <div class="header-stat-value" id="scopeMode">-</div>
+                    <div class="header-stat-label">Scope Mode</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-value" id="topK">-</div>
+                    <div class="header-stat-label">Top K</div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="card">
-            <h2>Search & Manage</h2>
-            <div class="tab-nav">
-                <button class="tab-btn active" data-tab="search">Search</button>
-                <button class="tab-btn" data-tab="list">Memory List</button>
-                <button class="tab-btn" data-tab="buffer">Buffer</button>
-                <button class="tab-btn" data-tab="config">Config</button>
-            </div>
-            
-            <div id="searchTab">
+    <div class="container">
+        <div class="tabs">
+            <button class="tab active" data-tab="search">🔍 Search</button>
+            <button class="tab" data-tab="list">📋 Memory List</button>
+            <button class="tab" data-tab="buffer">📥 Buffer</button>
+            <button class="tab" data-tab="config">⚙️ Config</button>
+        </div>
+
+        <div id="searchTab" class="tab-content active">
+            <div class="search-section">
                 <div class="search-box">
-                    <input type="text" id="searchQuery" placeholder="Enter keywords to search...">
-                    <select id="searchScope">
-                        <option value="global">Global</option>
-                        <option value="platform:telegram">Platform: Telegram</option>
-                        <option value="platform:onebot">Platform: OneBot</option>
+                    <div class="search-input-wrapper">
+                        <input type="text" id="searchQuery" class="search-input" placeholder="Search memories with keywords...">
+                    </div>
+                    <select id="searchScope" class="scope-select">
+                        <option value="global">🌐 Global</option>
+                        <option value="platform:telegram">📱 Telegram</option>
+                        <option value="platform:onebot">💬 OneBot</option>
                     </select>
                     <button class="btn btn-primary" onclick="searchMemories()">Search</button>
                 </div>
-                <div id="searchResults" class="memory-list"></div>
             </div>
+            <div id="searchResults" class="memory-grid"></div>
+        </div>
 
-            <div id="listTab" style="display:none;">
+        <div id="listTab" class="tab-content">
+            <div class="search-section">
                 <div class="search-box">
-                    <select id="listScope">
-                        <option value="global">Global</option>
-                        <option value="platform:telegram">Platform: Telegram</option>
-                        <option value="platform:onebot">Platform: OneBot</option>
+                    <select id="listScope" class="scope-select">
+                        <option value="global">🌐 Global</option>
+                        <option value="platform:telegram">📱 Telegram</option>
+                        <option value="platform:onebot">💬 OneBot</option>
                     </select>
                     <button class="btn btn-primary" onclick="loadMemories()">Load</button>
                     <button class="btn btn-danger" onclick="clearMemories()">Clear All</button>
                 </div>
-                <div id="memoryList" class="memory-list"></div>
             </div>
+            <div id="memoryList" class="memory-grid"></div>
+        </div>
 
-            <div id="bufferTab" style="display:none;">
+        <div id="bufferTab" class="tab-content">
+            <div class="search-section">
                 <div class="search-box">
-                    <button class="btn btn-primary" onclick="loadBuffer()">Refresh Buffer</button>
+                    <button class="btn btn-primary" onclick="loadBuffer()">🔄 Refresh Buffer</button>
                 </div>
-                <div id="bufferList" class="memory-list"></div>
             </div>
+            <div id="bufferList" class="memory-grid"></div>
+        </div>
 
-            <div id="configTab" style="display:none;">
-                <div class="form-group">
-                    <label>Scope Mode</label>
-                    <input type="text" id="configScopeMode" readonly>
+        <div id="configTab" class="tab-content">
+            <div class="config-grid">
+                <div class="config-card">
+                    <div class="config-label">Scope Mode</div>
+                    <div class="config-value" id="configScopeMode">-</div>
                 </div>
-                <div class="form-group">
-                    <label>Inject Enabled</label>
-                    <input type="text" id="configInject" readonly>
+                <div class="config-card">
+                    <div class="config-label">Inject Enabled</div>
+                    <div class="config-value" id="configInject">-</div>
                 </div>
-                <div class="form-group">
-                    <label>Num Pairs (summary threshold)</label>
-                    <input type="text" id="configNumPairs" readonly>
+                <div class="config-card">
+                    <div class="config-label">Num Pairs (Summary Threshold)</div>
+                    <div class="config-value" id="configNumPairs">-</div>
                 </div>
-                <div class="form-group">
-                    <label>Top K</label>
-                    <input type="text" id="configTopK" readonly>
+                <div class="config-card">
+                    <div class="config-label">Top K</div>
+                    <div class="config-value" id="configTopK">-</div>
                 </div>
-                <div class="form-group">
-                    <label>Embedding Dimension</label>
-                    <input type="text" id="configEmbeddingDim" readonly>
+                <div class="config-card">
+                    <div class="config-label">Embedding Dimension</div>
+                    <div class="config-value" id="configEmbeddingDim">-</div>
                 </div>
             </div>
         </div>
@@ -436,19 +742,15 @@ class FAISSRAGWebUIServer:
     <script>
         let currentTab = 'search';
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        // Tab Navigation
+        document.querySelectorAll('.tab').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
-                document.getElementById('searchTab').style.display = 'none';
-                document.getElementById('listTab').style.display = 'none';
-                document.getElementById('bufferTab').style.display = 'none';
-                document.getElementById('configTab').style.display = 'none';
-                
-                const tab = btn.dataset.tab;
-                document.getElementById(tab + 'Tab').style.display = 'block';
-                currentTab = tab;
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+                currentTab = btn.dataset.tab;
             });
         });
 
@@ -467,14 +769,53 @@ class FAISSRAGWebUIServer:
                 document.getElementById('scopeMode').textContent = data.scope_mode;
                 document.getElementById('topK').textContent = data.top_k;
                 
-                document.getElementById('configScopeMode').value = data.scope_mode;
-                document.getElementById('configInject').value = data.inject_enabled ? 'Yes' : 'No';
-                document.getElementById('configNumPairs').value = data.num_pairs;
-                document.getElementById('configTopK').value = data.top_k;
-                document.getElementById('configEmbeddingDim').value = data.embedding_dim;
+                document.getElementById('configScopeMode').textContent = data.scope_mode;
+                document.getElementById('configInject').textContent = data.inject_enabled ? '✓ Enabled' : '✗ Disabled';
+                document.getElementById('configNumPairs').textContent = data.num_pairs;
+                document.getElementById('configTopK').textContent = data.top_k;
+                document.getElementById('configEmbeddingDim').textContent = data.embedding_dim;
             } catch (e) {
                 console.error(e);
             }
+        }
+
+        function renderMemoryCard(m, showScore = false, showActions = false) {
+            const scoreHtml = showScore && m.score ? 
+                `<span class="memory-score">${(m.score * 100).toFixed(1)}%</span>` : '';
+            
+            const metaTags = [];
+            if (m.platform) metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">📱</span>${m.platform}</span>`);
+            if (m.chat_type) metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">💬</span>${m.chat_type}</span>`);
+            if (m.chat_id) metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">🆔</span>${m.chat_id}</span>`);
+            if (m.sender_id) metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">👤</span>${m.sender_id}${m.sender_name ? '(' + m.sender_name + ')' : ''}</span>`);
+            if (m.scope_key) metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">🌐</span>${m.scope_key}</span>`);
+            if (m.timestamp) {
+                const date = new Date(m.timestamp * 1000);
+                metaTags.push(`<span class="meta-tag"><span class="meta-tag-icon">🕐</span>${date.toLocaleString()}</span>`);
+            }
+
+            const actionsHtml = showActions ? `
+                <div class="memory-actions">
+                    <button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id || m.memory_id}')">Delete</button>
+                </div>
+            ` : '';
+
+            const idDisplay = m.id || m.memory_id || '-';
+
+            return `
+                <div class="memory-card">
+                    <div class="memory-header">
+                        <span class="memory-role">${m.role || 'unknown'}</span>
+                        <span class="memory-id">ID: ${idDisplay.substring(0, 8)}...</span>
+                        ${scoreHtml}
+                    </div>
+                    <div class="memory-content">${escapeHtml(m.content)}</div>
+                    <div class="memory-meta">
+                        ${metaTags.join('')}
+                    </div>
+                    ${actionsHtml}
+                </div>
+            `;
         }
 
         async function searchMemories() {
@@ -483,11 +824,19 @@ class FAISSRAGWebUIServer:
             const resultsDiv = document.getElementById('searchResults');
             
             if (!query) {
-                resultsDiv.innerHTML = '<div class="empty">Please enter keywords</div>';
+                resultsDiv.innerHTML = `
+                    <div class="state-message">
+                        <div class="state-icon">🔍</div>
+                        <div class="state-text">Please enter keywords to search</div>
+                    </div>`;
                 return;
             }
 
-            resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+            resultsDiv.innerHTML = `
+                <div class="state-message">
+                    <div class="state-icon">⏳</div>
+                    <div class="state-text">Searching...</div>
+                </div>`;
 
             try {
                 const resp = await fetch('/api/memories/search', {
@@ -498,49 +847,61 @@ class FAISSRAGWebUIServer:
                 const data = await resp.json();
                 
                 if (!data.results || data.results.length === 0) {
-                    resultsDiv.innerHTML = '<div class="empty">No results found</div>';
+                    resultsDiv.innerHTML = `
+                        <div class="state-message">
+                            <div class="state-icon">📭</div>
+                            <div class="state-text">No memories found</div>
+                        </div>`;
                     return;
                 }
 
-                resultsDiv.innerHTML = data.results.map(m => `
-                    <div class="memory-item">
-                        <div class="memory-content">${escapeHtml(m.content)}</div>
-                        <div class="memory-meta">
-                            <span>Score: ${(m.score * 100).toFixed(1)}%</span>
-                            <span>Role: ${m.role || 'unknown'}</span>
-                        </div>
-                    </div>
-                `).join('');
+                resultsDiv.innerHTML = data.results.map(m => renderMemoryCard(m, true, false)).join('');
+
             } catch (e) {
-                resultsDiv.innerHTML = '<div class="empty">Search failed: ' + e.message + '</div>';
+                resultsDiv.innerHTML = `
+                    <div class="state-message">
+                        <div class="state-icon">❌</div>
+                        <div class="state-text">Search failed: ${e.message}</div>
+                    </div>`;
             }
         }
 
         async function loadBuffer() {
             const bufferDiv = document.getElementById('bufferList');
-            bufferDiv.innerHTML = '<div class="loading">Loading...</div>';
+            bufferDiv.innerHTML = `
+                <div class="state-message">
+                    <div class="state-icon">⏳</div>
+                    <div class="state-text">Loading...</div>
+                </div>`;
 
             try {
                 const resp = await fetch('/api/buffer');
                 const data = await resp.json();
                 
                 if (!data.messages || data.messages.length === 0) {
-                    bufferDiv.innerHTML = '<div class="empty">Buffer is empty</div>';
+                    bufferDiv.innerHTML = `
+                        <div class="state-message">
+                            <div class="state-icon">📥</div>
+                            <div class="state-text">Buffer is empty</div>
+                        </div>`;
                     return;
                 }
 
-                bufferDiv.innerHTML = '<div class="stat-item" style="margin-bottom:15px;text-align:left;"><span class="stat-value" style="font-size:18px;">' + data.count + '</span><span class="stat-label"> messages in buffer</span></div>' +
-                    data.messages.map(m => `
-                    <div class="memory-item">
-                        <div class="memory-content">${escapeHtml(m.content || '')}</div>
-                        <div class="memory-meta">
-                            <span>Role: ${m.role || 'unknown'}</span>
-                            <span>Time: ${m.timestamp || '-'}</span>
-                        </div>
+                bufferDiv.innerHTML = `
+                    <div class="memory-card" style="margin-bottom: 16px;">
+                        <span class="memory-role">${data.count} messages in buffer</span>
                     </div>
-                `).join('');
+                ` + data.messages.map(m => {
+                    m.role = m.role || 'buffer';
+                    return renderMemoryCard(m, false, false);
+                }).join('');
+
             } catch (e) {
-                bufferDiv.innerHTML = '<div class="empty">Load failed: ' + e.message + '</div>';
+                bufferDiv.innerHTML = `
+                    <div class="state-message">
+                        <div class="state-icon">❌</div>
+                        <div class="state-text">Load failed: ${e.message}</div>
+                    </div>`;
             }
         }
 
@@ -548,28 +909,33 @@ class FAISSRAGWebUIServer:
             const scope = document.getElementById('listScope').value;
             const listDiv = document.getElementById('memoryList');
             
-            listDiv.innerHTML = '<div class="loading">Loading...</div>';
+            listDiv.innerHTML = `
+                <div class="state-message">
+                    <div class="state-icon">⏳</div>
+                    <div class="state-text">Loading...</div>
+                </div>`;
 
             try {
                 const resp = await fetch('/api/memories?scope=' + encodeURIComponent(scope) + '&limit=50');
                 const data = await resp.json();
                 
                 if (!data.memories || data.memories.length === 0) {
-                    listDiv.innerHTML = '<div class="empty">No memories found</div>';
+                    listDiv.innerHTML = `
+                        <div class="state-message">
+                            <div class="state-icon">📭</div>
+                            <div class="state-text">No memories found</div>
+                        </div>`;
                     return;
                 }
 
-                listDiv.innerHTML = data.memories.map(m => `
-                    <div class="memory-item">
-                        <div class="memory-content">${escapeHtml(m.content)}</div>
-                        <div class="memory-meta">
-                            <span>Role: ${m.role || 'unknown'}</span>
-                            <button class="btn btn-danger btn-sm" onclick="deleteMemory('${m.id}')">Delete</button>
-                        </div>
-                    </div>
-                `).join('');
+                listDiv.innerHTML = data.memories.map(m => renderMemoryCard(m, false, true)).join('');
+
             } catch (e) {
-                listDiv.innerHTML = '<div class="empty">Load failed: ' + e.message + '</div>';
+                listDiv.innerHTML = `
+                    <div class="state-message">
+                        <div class="state-icon">❌</div>
+                        <div class="state-text">Load failed: ${e.message}</div>
+                    </div>`;
             }
         }
 

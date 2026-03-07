@@ -207,6 +207,32 @@ class FAISSMemoryStore:
             logger.error(f"[FAISSRAG] 搜索失败: {e}", exc_info=True)
             return []
 
+    async def get_memory_by_id(self, memory_id: str) -> Optional[dict[str, Any]]:
+        """根据 ID 获取记忆详情"""
+        try:
+            meta = self._metadata.get(memory_id)
+            if not meta:
+                return None
+
+            return {
+                "memory_id": meta.get("memory_id"),
+                "content": meta.get("content"),
+                "role": meta.get("role"),
+                "scope_key": meta.get("scope_key"),
+                "timestamp": meta.get("timestamp"),
+                "sender_id": meta.get("sender_id"),
+                "sender_name": meta.get("sender_name"),
+                "platform": meta.get("platform"),
+                "chat_type": meta.get("chat_type"),
+                "chat_id": meta.get("chat_id"),
+                "message_count": meta.get("message_count"),
+                "summary": meta.get("summary"),
+            }
+
+        except Exception as e:
+            logger.error(f"[FAISSRAG] 获取记忆详情失败: {e}", exc_info=True)
+            return None
+
     async def delete_memory(self, memory_id: str) -> bool:
         """删除指定记忆"""
         # FAISS 不支持删除，标记返回失败
@@ -288,15 +314,21 @@ class FAISSMemoryStore:
             end = min(offset + limit, len(ids))
             result = []
             
-            for idx in ids[offset:end]:
-                if idx < len(self._metadata):
-                    meta = self._metadata[idx]
+            for memory_id in ids[offset:end]:
+                meta = self._metadata.get(memory_id)
+                if meta:
                     result.append({
-                        "id": str(idx),
+                        "id": memory_id,
+                        "memory_id": memory_id,
                         "content": meta.get("content", ""),
                         "role": meta.get("role", "unknown"),
-                        "scope_key": scope_key,
+                        "scope_key": meta.get("scope_key", scope_key),
                         "timestamp": meta.get("timestamp", 0),
+                        "sender_id": meta.get("sender_id"),
+                        "sender_name": meta.get("sender_name"),
+                        "platform": meta.get("platform"),
+                        "chat_type": meta.get("chat_type"),
+                        "chat_id": meta.get("chat_id"),
                     })
             
             return result
