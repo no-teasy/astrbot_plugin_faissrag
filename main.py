@@ -871,16 +871,15 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 /zmem exclude list - 查看列表
 
 参数:
-  --all    同时排除注入和存储（默认）
+  --all   同时排除注入和存储（默认）
   --inject 只排除/移除注入
   --store  只排除/移除存储
 
 示例:
-/zmem exclude add group 123456789           # 排除注入和存储
-/zmem exclude add group 123456789 --inject    # 只排除注入
-/zmem exclude add user 987654321 --store     # 只排除存储
-/zmem exclude remove group 123456789         # 移除注入和存储
-/zmem exclude remove user 987654321 --inject  # 只移除注入""")
+/zmem exclude add group 123456789 --inject
+/zmem exclude add user 987654321 --store
+/zmem exclude remove group 123456789
+/zmem exclude remove user 987654321 --inject""")
             return
         
         action = match.group(1).lower()
