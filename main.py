@@ -110,7 +110,17 @@ class FAISSRAGPlugin(Star):
             # 回退到平面格式
             self.exclude_inject = set(str(x) for x in self.config.get("exclude_inject", []))
             self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
-        self.exclude_store = set(str(x) for x in self.config.get("exclude_store", []))
+        
+        # 尝试从 KV 存储加载排除配置
+        try:
+            kv_exclude_inject = await self.get_kv_data("exclude_inject", [])
+            kv_exclude_store = await self.get_kv_data("exclude_store", [])
+            if kv_exclude_inject:
+                self.exclude_inject = set(str(x) for x in kv_exclude_inject)
+            if kv_exclude_store:
+                self.exclude_store = set(str(x) for x in kv_exclude_store)
+        except Exception as e:
+            logger.warning(f"[FAISSRAG] Failed to load exclude config from KV: {e}")
 
         # WebUI 服务器
         self.webui_server: Optional[FAISSRAGWebUIServer] = None
@@ -160,23 +170,26 @@ class FAISSRAGPlugin(Star):
         return True
 
     def _save_exclude_config(self):
-        """保存排除会话配置到文件"""
+        """保存排除会话配置到 KV 存储"""
         try:
-            # 支持嵌套格式（新）和平面格式（旧）
-            filter_config = self.config.get("filter", {})
-            if isinstance(filter_config, dict):
-                filter_config["exclude_inject"] = list(self.exclude_inject)
-                filter_config["exclude_store"] = list(self.exclude_store)
-                self.config["filter"] = filter_config
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 如果在异步上下文中，使用 ensure_future
+                asyncio.ensure_future(self._save_exclude_config_async())
             else:
-                # 旧平面格式
-                self.config["exclude_inject"] = list(self.exclude_inject)
-                self.config["exclude_store"] = list(self.exclude_store)
-            if hasattr(self.config, 'save_config'):
-                self.config.save_config()
-                logger.info("[FAISSRAG] Config saved")
+                loop.run_until_complete(self._save_exclude_config_async())
         except Exception as e:
-            logger.warning(f"[FAISSRAG] Failed to save config: {e}")
+            logger.warning(f"[FAISSRAG] Failed to save exclude config: {e}")
+
+    async def _save_exclude_config_async(self):
+        """异步保存排除会话配置"""
+        try:
+            await self.put_kv_data("exclude_inject", list(self.exclude_inject))
+            await self.put_kv_data("exclude_store", list(self.exclude_store))
+            logger.info("[FAISSRAG] Exclude config saved to KV storage")
+        except Exception as e:
+            logger.warning(f"[FAISSRAG] Failed to save exclude config to KV: {e}")
 
     def _get_plugin_data_dir(self) -> Path:
         """获取插件数据目录"""
@@ -1013,8 +1026,6 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 - embedding_dim: 嵌入向量维度
 - top_k: 检索结果数量
 - inject_enabled: 启用记忆注入
-- exclude_inject: 排除注入的会话 ID（格式: group:群号 或 user:用户号）
-- exclude_store: 排除存储的会话 ID
 """
         yield event.plain_result(help_text)
 
