@@ -708,6 +708,16 @@ class FAISSRAGPlugin(Star):
             except Exception as restore_error:
                 logger.error(f"[FAISSRAG] 恢复缓冲区失败: {restore_error}")
 
+    @filter.command("new")
+    @filter.command("groupnew")
+    async def cmd_new(self, event: AstrMessageEvent):
+        """监听 /new 和 /groupnew 命令，清空缓冲区"""
+        async with self._buffer_lock:
+            cleared = len(self._message_buffer)
+            self._message_buffer.clear()
+            self._pending_user_messages.clear()
+        logger.info(f"[FAISSRAG] /new 或 /groupnew 命令已执行，已清空缓冲区 ({cleared} 条)")
+
     # ==================== 命令处理 ====================
 
     @filter.command_group("zmem")
