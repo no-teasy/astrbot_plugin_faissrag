@@ -25,7 +25,7 @@ from .webui.server import FAISSRAGWebUIServer
     "astrbot_plugin_faissrag",
     "FAISSRAG",
     "FAISS-based RAG long-term memory plugin.",
-    "1.0.5",
+    "1.0.6",
 )
 class FAISSRAGPlugin(Star):
     """FAISSRAG 插件主类"""
@@ -34,6 +34,8 @@ class FAISSRAGPlugin(Star):
         super().__init__(context)
         self.config: AstrBotConfig = config
         self.context = context
+
+        logger.info("[FAISSRAG] 插件实例已创建")
 
         # 获取插件数据目录
         self.plugin_data_dir = self._get_plugin_data_dir()
@@ -207,17 +209,23 @@ class FAISSRAGPlugin(Star):
 
     async def _start_webui(self):
         """启动 WebUI 服务器"""
+        logger.info("[FAISSRAG] 正在启动 WebUI...")
+        
         try:
             # 从配置获取 WebUI 设置
+            # 兼容旧的平面格式和新嵌套格式
             webui_config = self.config.get("webui", {})
-            if isinstance(webui_config, dict):
-                enabled = webui_config.get("enabled", True)
-                port = webui_config.get("port", 0)  # 0 表示随机端口
-                host = webui_config.get("host", "127.0.0.1")
-            else:
+            
+            # 如果是空字典（旧的平面配置格式），默认启用
+            if not webui_config or not isinstance(webui_config, dict):
+                logger.info("[FAISSRAG] 未找到 WebUI 配置，默认启用")
                 enabled = True
                 port = 0
                 host = "127.0.0.1"
+            else:
+                enabled = webui_config.get("enabled", True)
+                port = webui_config.get("port", 0)
+                host = webui_config.get("host", "127.0.0.1")
 
             logger.info(f"[FAISSRAG] WebUI 配置: enabled={enabled}, host={host}, port={port}")
 
