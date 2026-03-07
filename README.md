@@ -21,3 +21,7 @@
 - `/zmem status` - 查看记忆系统状态
 - `/zmem search <关键词>` - 搜索记忆
 - `/zmem clear` - 清除当前会话记忆
+
+## 致谢
+
+感谢 [astrbot_plugin_llm_amnesia](https://github.com/SinkAbyss/astrbot_plugin_llm_amnesia) 提供的遗忘功能参考实现。

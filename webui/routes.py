@@ -220,3 +220,16 @@ def setup_routes(app: FastAPI, get_plugin):
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/buffer/clear")
+    async def clear_buffer():
+        """Clear message buffer"""
+        plugin = get_plugin()
+        try:
+            async with plugin._buffer_lock:
+                count = len(plugin._message_buffer)
+                plugin._message_buffer.clear()
+                plugin._pending_user_messages.clear()
+            return {"success": True, "cleared": count}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))

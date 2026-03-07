@@ -120,6 +120,11 @@ class FAISSRAGPlugin(Star):
         self._pending_user_messages: dict[str, dict] = {}  # 存储待配对的用户消息
         self._buffer_lock = asyncio.Lock()
 
+        # 遗忘功能 - 可恢复的删除记录
+        self._forget_records: dict[str, dict] = {}  # key: chat_id, value: {history: [], buffer: [], timestamp: float}
+        self._forget_lock = asyncio.Lock()
+        self._forget_cleanup_task: Optional[asyncio.Task] = None
+
     def _create_tracked_task(self, coro) -> asyncio.Task:
         """创建并跟踪后台任务"""
         task = asyncio.create_task(coro)
@@ -997,6 +1002,205 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
         else:
             yield event.plain_result(f"总结完成，缓冲区中剩余 {remaining} 条消息")
 
+    def _is_private_chat(self, event: AstrMessageEvent) -> bool:
+        """判断是否为私聊"""
+        # 检查是否有群ID，如果没有则是私聊
+        group_id = getattr(event, "get_group_id", lambda: "")()
+        return not bool(group_id)
+
+    async def _check_admin_or_private(self, event: AstrMessageEvent) -> bool:
+        """检查是否有权限：私聊直接通过，群聊需要管理员"""
+        if self._is_private_chat(event):
+            return True
+        # 群聊检查管理员权限
+        return await event.is_admin()
+
+    @zmem_group.command("forget")
+    async def cmd_forget(self, event: AstrMessageEvent, rounds: int = 1):
+        """遗忘最近n轮对话"""
+        if not await self._check_admin_or_private(event):
+            yield event.plain_result("⚠️ 群聊需要管理员权限才能执行此命令")
+            return
+
+        if not await self._ensure_initialized():
+            yield event.plain_result("插件正在初始化，请稍后再试...")
+            return
+
+        # 限制遗忘轮次
+        rounds = max(1, min(rounds, 10))
+        chat_id = self._get_chat_id(event)
+
+        # 1. 保存并清空插件缓冲区
+        cleared_buffer = 0
+        deleted_buffer = []
+        async with self._buffer_lock:
+            cleared_buffer = len(self._message_buffer)
+            deleted_buffer = self._message_buffer.copy()
+            self._message_buffer.clear()
+            self._pending_user_messages.clear()
+
+        # 2. 清除 AstrBot 上下文管理器中的对话
+        cleared_context = 0
+        deleted_history = []
+        try:
+            conv_mgr = getattr(self.context, "conversation_manager", None)
+            if conv_mgr:
+                unified_msg_origin = getattr(event, "unified_msg_origin", None)
+                if unified_msg_origin:
+                    curr_cid = await conv_mgr.get_curr_conversation_id(unified_msg_origin)
+                    if curr_cid:
+                        conversation = await conv_mgr.get_conversation(unified_msg_origin, curr_cid)
+                        if conversation:
+                            history = conversation.get("history", [])
+                            # 从后往前删除指定轮次（用户+AI=1轮）
+                            pairs_to_delete = rounds * 2  # 每轮包含用户消息和AI回复
+                            if len(history) > 0:
+                                # 删除最后的消息直到达到指定的轮次
+                                while len(deleted_history) < pairs_to_delete and history:
+                                    deleted_history.insert(0, history.pop())
+                                cleared_context = len(deleted_history)
+                                # 更新会话历史
+                                await conv_mgr.update_conversation(unified_msg_origin, curr_cid, {"history": history})
+        except Exception as e:
+            logger.warning(f"[FAISSRAG] 清除上下文失败: {e}")
+
+        # 3. 保存删除的记录以便恢复
+        import time
+        if deleted_buffer or deleted_history:
+            async with self._forget_lock:
+                self._forget_records[chat_id] = {
+                    "buffer": deleted_buffer,
+                    "history": deleted_history,
+                    "timestamp": time.time()
+                }
+
+        # 4. 启动后台清理任务（30分钟后自动清除恢复记录）
+        if not self._forget_cleanup_task or self._forget_cleanup_task.done():
+            self._forget_cleanup_task = self._create_tracked_task(self._cleanup_forget_records())
+
+        result_msg = f"✅ 已遗忘最近 {rounds} 轮对话\n"
+        result_msg += f"🗑️ 已清理缓冲区: {cleared_buffer} 条\n"
+        result_msg += f"🧠 已清理上下文: {cleared_context} 条\n"
+        if cleared_buffer == 0 and cleared_context == 0:
+            result_msg += "\n💡 没有需要遗忘的内容"
+        else:
+            result_msg += "\n💡 在下一条消息发送前，发送 /zmem cancel_forget 可以恢复这些对话"
+
+        yield event.plain_result(result_msg)
+
+    async def _cleanup_forget_records(self):
+        """定期清理过期的遗忘记录（30分钟）"""
+        while True:
+            try:
+                await asyncio.sleep(300)  # 每5分钟检查一次
+                import time
+                now = time.time()
+                expired_keys = []
+                async with self._forget_lock:
+                    for key, record in self._forget_records.items():
+                        if now - record.get("timestamp", 0) > 1800:  # 30分钟
+                            expired_keys.append(key)
+                    for key in expired_keys:
+                        self._forget_records.pop(key, None)
+                if expired_keys:
+                    logger.info(f"[FAISSRAG] 已清理 {len(expired_keys)} 条过期遗忘记录")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"[FAISSRAG] 清理遗忘记录失败: {e}")
+
+    @zmem_group.command("cancel_forget")
+    async def cmd_cancel_forget(self, event: AstrMessageEvent):
+        """取消遗忘，恢复对话"""
+        if not await self._check_admin_or_private(event):
+            yield event.plain_result("⚠️ 群聊需要管理员权限才能执行此命令")
+            return
+
+        chat_id = self._get_chat_id(event)
+        if not chat_id:
+            yield event.plain_result("无法获取会话ID")
+            return
+
+        async with self._forget_lock:
+            record = self._forget_records.get(chat_id)
+
+        if not record:
+            yield event.plain_result("没有可恢复的遗忘记录")
+            return
+
+        # 1. 恢复缓冲区
+        restored_buffer = 0
+        async with self._buffer_lock:
+            if record.get("buffer"):
+                self._message_buffer.extend(record["buffer"])
+                restored_buffer = len(record["buffer"])
+
+        # 2. 恢复上下文历史
+        restored_context = 0
+        try:
+            conv_mgr = getattr(self.context, "conversation_manager", None)
+            if conv_mgr:
+                unified_msg_origin = getattr(event, "unified_msg_origin", None)
+                if unified_msg_origin:
+                    curr_cid = await conv_mgr.get_curr_conversation_id(unified_msg_origin)
+                    if curr_cid:
+                        conversation = await conv_mgr.get_conversation(unified_msg_origin, curr_cid)
+                        if conversation:
+                            history = conversation.get("history", [])
+                            # 恢复删除的历史
+                            if record.get("history"):
+                                history.extend(record["history"])
+                                restored_context = len(record["history"])
+                                await conv_mgr.update_conversation(unified_msg_origin, curr_cid, {"history": history})
+        except Exception as e:
+            logger.warning(f"[FAISSRAG] 恢复上下文失败: {e}")
+
+        # 3. 清除恢复记录
+        async with self._forget_lock:
+            self._forget_records.pop(chat_id, None)
+
+        result_msg = f"✅ 已恢复被遗忘的对话\n"
+        result_msg += f"📥 已恢复缓冲区: {restored_buffer} 条\n"
+        result_msg += f"🧠 已恢复上下文: {restored_context} 条"
+
+        yield event.plain_result(result_msg)
+
+    @zmem_group.command("forget_status")
+    async def cmd_forget_status(self, event: AstrMessageEvent):
+        """查看遗忘状态"""
+        if not await self._check_admin_or_private(event):
+            yield event.plain_result("⚠️ 群聊需要管理员权限才能执行此命令")
+            return
+
+        chat_id = self._get_chat_id(event)
+        if not chat_id:
+            yield event.plain_result("无法获取会话ID")
+            return
+
+        async with self._forget_lock:
+            record = self._forget_records.get(chat_id)
+
+        if not record:
+            yield event.plain_result("📝 遗忘状态\n\n暂无遗忘记录")
+            return
+
+        import time
+        elapsed = int(time.time() - record.get("timestamp", 0))
+        minutes = elapsed // 60
+        seconds = elapsed % 60
+        time_str = f"{minutes}分钟前" if minutes > 0 else f"{seconds}秒前"
+
+        buffer_count = len(record.get("buffer", []))
+        history_count = len(record.get("history", []))
+
+        result_msg = f"📝 遗忘状态\n\n"
+        result_msg += f"⏰ 删除时间: {time_str}\n"
+        result_msg += f"🗑️ 缓冲区消息: {buffer_count} 条\n"
+        result_msg += f"🧠 上下文消息: {history_count} 条\n"
+        result_msg += f"\n💡 发送 /zmem cancel_forget 可以恢复这些对话"
+
+        yield event.plain_result(result_msg)
+
     @filter.permission_type(filter.PermissionType.ADMIN)
     @zmem_group.command("help")
     async def cmd_help(self, event: AstrMessageEvent):
@@ -1009,6 +1213,9 @@ Inject Status: {'Enabled' if self.inject_enabled else 'Disabled'}
 /zmem search <关键词> - 搜索相关记忆
 /zmem view <ID> - 查看记忆详情
 /zmem save - 手动触发总结并保存缓冲区
+/zmem forget [n] - 遗忘最近n轮对话（默认1轮，最多10轮）
+/zmem cancel_forget - 取消遗忘，恢复对话
+/zmem forget_status - 查看遗忘状态
 /zmem clear - 清除当前作用域记忆（管理员）
 /zmem exclude list - 查看排除列表
 /zmem exclude add group <群号> [--inject|--store|--all] - 排除
