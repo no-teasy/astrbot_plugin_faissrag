@@ -72,6 +72,61 @@ class FAISSRAGWebUIServer:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
+        @self.app.get("/api/scopes")
+        async def get_scopes():
+            """Get all available scopes"""
+            try:
+                if not self.plugin.memory_store:
+                    return {"scopes": []}
+
+                stats = await self.plugin.memory_store.get_stats()
+                scopes = stats.get("scopes", {})
+                
+                # 构建作用域选项列表
+                scope_options = []
+                
+                # 始终添加 global 选项
+                if "global" in scopes:
+                    scope_options.append({"key": "global", "label": "🌐 Global (所有会话)", "count": scopes.get("global", 0)})
+                else:
+                    scope_options.append({"key": "global", "label": "🌐 Global (所有会话)", "count": 0})
+                
+                # 添加其他作用域，按类型分组
+                other_scopes = {k: v for k, v in scopes.items() if k != "global"}
+                for scope_key, count in sorted(other_scopes.items()):
+                    # 解析作用域键
+                    if scope_key.startswith("platform:"):
+                        platform = scope_key.replace("platform:", "")
+                        scope_options.append({
+                            "key": scope_key, 
+                            "label": f"📱 Platform: {platform}", 
+                            "count": count
+                        })
+                    elif scope_key.startswith("group:"):
+                        group_id = scope_key.replace("group:", "")
+                        scope_options.append({
+                            "key": scope_key, 
+                            "label": f"💬 Group: {group_id}", 
+                            "count": count
+                        })
+                    elif scope_key.startswith("user:"):
+                        user_id = scope_key.replace("user:", "")
+                        scope_options.append({
+                            "key": scope_key, 
+                            "label": f"👤 User: {user_id}", 
+                            "count": count
+                        })
+                    else:
+                        scope_options.append({
+                            "key": scope_key, 
+                            "label": f"🔹 {scope_key}", 
+                            "count": count
+                        })
+                
+                return {"scopes": scope_options, "scope_mode": getattr(self.plugin, "scope_mode", "global")}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
         @self.app.get("/api/memories")
         async def get_memories(scope: str = "global", limit: int = 50, offset: int = 0):
             """Get memory list"""
@@ -679,9 +734,7 @@ class FAISSRAGWebUIServer:
                         <input type="text" id="searchQuery" class="search-input" placeholder="Search memories with keywords...">
                     </div>
                     <select id="searchScope" class="scope-select">
-                        <option value="global">🌐 Global</option>
-                        <option value="platform:telegram">📱 Telegram</option>
-                        <option value="platform:onebot">💬 OneBot</option>
+                        <option value="">Loading...</option>
                     </select>
                     <button class="btn btn-primary" onclick="searchMemories()">Search</button>
                 </div>
@@ -693,9 +746,7 @@ class FAISSRAGWebUIServer:
             <div class="search-section">
                 <div class="search-box">
                     <select id="listScope" class="scope-select">
-                        <option value="global">🌐 Global</option>
-                        <option value="platform:telegram">📱 Telegram</option>
-                        <option value="platform:onebot">💬 OneBot</option>
+                        <option value="">Loading...</option>
                     </select>
                     <button class="btn btn-primary" onclick="loadMemories()">Load</button>
                     <button class="btn btn-danger" onclick="clearMemories()">Clear All</button>
@@ -776,6 +827,42 @@ class FAISSRAGWebUIServer:
                 document.getElementById('configEmbeddingDim').textContent = data.embedding_dim;
             } catch (e) {
                 console.error(e);
+            }
+        }
+
+        async function loadScopes() {
+            try {
+                const resp = await fetch('/api/scopes');
+                const data = await resp.json();
+                
+                const searchScope = document.getElementById('searchScope');
+                const listScope = document.getElementById('listScope');
+                
+                searchScope.innerHTML = '';
+                listScope.innerHTML = '';
+                
+                if (data.scopes && data.scopes.length > 0) {
+                    data.scopes.forEach(scope => {
+                        const option = document.createElement('option');
+                        option.value = scope.key;
+                        option.textContent = `${scope.label} (${scope.count})`;
+                        searchScope.appendChild(option.cloneNode(true));
+                        listScope.appendChild(option);
+                    });
+                } else {
+                    // 没有数据时添加默认选项
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = 'global';
+                    defaultOption.textContent = '🌐 Global (0)';
+                    searchScope.appendChild(defaultOption.cloneNode(true));
+                    listScope.appendChild(defaultOption);
+                }
+            } catch (e) {
+                console.error('Failed to load scopes:', e);
+                // 回退到默认选项
+                const defaultOption = '<option value="global">🌐 Global</option>';
+                document.getElementById('searchScope').innerHTML = defaultOption;
+                document.getElementById('listScope').innerHTML = defaultOption;
             }
         }
 
@@ -982,6 +1069,7 @@ class FAISSRAGWebUIServer:
         });
 
         loadStats();
+        loadScopes();
     </script>
 </body>
 </html>"""
