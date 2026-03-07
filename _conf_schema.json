@@ -96,20 +96,6 @@
         "description": "平台黑名单",
         "hint": "禁用记忆功能的平台列表，如 [\"onebot\", \"telegram\"]",
         "default": []
-      },
-      "exclude_inject": {
-        "type": "list",
-        "items": {"type": "string"},
-        "description": "不注入记忆的会话",
-        "hint": "不检索记忆注入 LLM 的会话 ID（群号/用户 ID）",
-        "default": []
-      },
-      "exclude_store": {
-        "type": "list",
-        "items": {"type": "string"},
-        "description": "不存储记忆的会话",
-        "hint": "不保存消息到记忆库的会话 ID（群号/用户 ID）",
-        "default": []
       }
     }
   },
