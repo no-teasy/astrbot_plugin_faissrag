@@ -87,9 +87,17 @@ class FAISSRAGWebUIServer:
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/api/memories/search")
-        async def search_memories(query: str, scope: str = "global", top_k: int = 5):
+        async def search_memories(request: Request):
             """Search memories"""
             try:
+                body = await request.json()
+                query = body.get("query", "")
+                scope = body.get("scope", "global")
+                top_k = body.get("top_k", 5)
+
+                if not query:
+                    return {"results": []}
+
                 if not self.plugin.embedding_provider:
                     raise HTTPException(status_code=400, detail="Embedding provider not ready")
 
@@ -138,6 +146,18 @@ class FAISSRAGWebUIServer:
                 "top_k": self.plugin.top_k,
                 "embedding_dim": self.plugin.embedding_dim,
             }
+
+        @self.app.get("/api/buffer")
+        async def get_buffer():
+            """Get current message buffer (staging area)"""
+            try:
+                buffer = self.plugin._message_buffer
+                return {
+                    "count": len(buffer),
+                    "messages": buffer
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
 
     def _get_index_html(self) -> str:
         """Get index HTML"""
@@ -351,6 +371,7 @@ class FAISSRAGWebUIServer:
             <div class="tab-nav">
                 <button class="tab-btn active" data-tab="search">Search</button>
                 <button class="tab-btn" data-tab="list">Memory List</button>
+                <button class="tab-btn" data-tab="buffer">Buffer</button>
                 <button class="tab-btn" data-tab="config">Config</button>
             </div>
             
@@ -378,6 +399,13 @@ class FAISSRAGWebUIServer:
                     <button class="btn btn-danger" onclick="clearMemories()">Clear All</button>
                 </div>
                 <div id="memoryList" class="memory-list"></div>
+            </div>
+
+            <div id="bufferTab" style="display:none;">
+                <div class="search-box">
+                    <button class="btn btn-primary" onclick="loadBuffer()">Refresh Buffer</button>
+                </div>
+                <div id="bufferList" class="memory-list"></div>
             </div>
 
             <div id="configTab" style="display:none;">
@@ -415,6 +443,7 @@ class FAISSRAGWebUIServer:
                 
                 document.getElementById('searchTab').style.display = 'none';
                 document.getElementById('listTab').style.display = 'none';
+                document.getElementById('bufferTab').style.display = 'none';
                 document.getElementById('configTab').style.display = 'none';
                 
                 const tab = btn.dataset.tab;
@@ -484,6 +513,34 @@ class FAISSRAGWebUIServer:
                 `).join('');
             } catch (e) {
                 resultsDiv.innerHTML = '<div class="empty">Search failed: ' + e.message + '</div>';
+            }
+        }
+
+        async function loadBuffer() {
+            const bufferDiv = document.getElementById('bufferList');
+            bufferDiv.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                const resp = await fetch('/api/buffer');
+                const data = await resp.json();
+                
+                if (!data.messages || data.messages.length === 0) {
+                    bufferDiv.innerHTML = '<div class="empty">Buffer is empty</div>';
+                    return;
+                }
+
+                bufferDiv.innerHTML = '<div class="stat-item" style="margin-bottom:15px;text-align:left;"><span class="stat-value" style="font-size:18px;">' + data.count + '</span><span class="stat-label"> messages in buffer</span></div>' +
+                    data.messages.map(m => `
+                    <div class="memory-item">
+                        <div class="memory-content">${escapeHtml(m.content || '')}</div>
+                        <div class="memory-meta">
+                            <span>Role: ${m.role || 'unknown'}</span>
+                            <span>Time: ${m.timestamp || '-'}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                bufferDiv.innerHTML = '<div class="empty">Load failed: ' + e.message + '</div>';
             }
         }
 
